@@ -39,8 +39,8 @@ La página de precios de Venice muestra que Max cuesta US$200/mes e incluye 22,5
 
 La documentación pública que revisamos **no garantiza que los 22,500 créditos del plan Max se apliquen a solicitudes x402**. Por eso AveroAI no promete utilizar los créditos Max con x402. Si la prioridad absoluta es gastar los créditos del plan Max, habrá que confirmar con Venice si ese saldo se puede consumir con x402; si no, el método oficial de API requiere una API key. No hay una forma legítima documentada de combinar “sin API key” + “usar automáticamente todos los créditos Max”.
 
-## Seguridad
-Esta versión utiliza una wallet de servidor compartida. Un visitante público podría consumir el saldo de esa wallet. Antes de abrir AveroAI al público, añadir autenticación de usuarios, cuotas persistentes por usuario, rate limits distribuidos, límite de gasto y monitoreo de balance. Usar una wallet dedicada y nunca subir su clave privada al repositorio.
+## Seguridad y acceso privado
+La rama incluye una puerta de acceso con código compartido y cookie de sesión HttpOnly firmada (duración de 7 días). El servidor bloquea la aplicación si faltan `AVERO_ACCESS_CODE` o `AVERO_SESSION_SECRET`. El chat también aplica un límite temporal en memoria por IP. Esto protege una instalación personal o privada, pero **no equivale a cuentas multiusuario ni a cuotas persistentes**: antes de ofrecer el servicio públicamente hacen falta usuarios individuales, cuotas persistentes, rate limiting distribuido y un límite de gasto externo. Usa una wallet x402 dedicada con saldo limitado y sin recarga automática.
 
 ## Instalación local (Windows PowerShell)
 Requisitos: Node.js 20.9+ (recomendado Node 22 LTS) y Git.
@@ -58,9 +58,14 @@ Configura el secreto localmente:
 ```env
 VENICE_WALLET_PRIVATE_KEY=clave_privada_de_wallet_dedicada
 APP_URL=http://localhost:3000
+AVERO_ACCESS_CODE=un_codigo_privado_largo
+AVERO_SESSION_SECRET=secreto_aleatorio_de_32_bytes_o_mas
+
+# Genera un secreto de sesión en PowerShell:
+[Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(48))
 ```
 
-No pegues la clave privada en chats, no la añadas a commits y no uses tu wallet principal. La wallet debe tener saldo USDC x402 en Base/Solana (y gas de red); el SDK debe configurarse con una clave compatible con el modo de wallet que uses.
+No pegues la clave privada en chats, no la añadas a commits y no uses tu wallet principal. La wallet debe tener saldo USDC x402 en Base/Solana (y gas de red). Configura un código privado largo en `AVERO_ACCESS_CODE` y un secreto aleatorio en `AVERO_SESSION_SECRET`; nunca compartas esos valores. La aplicación redirige a `/access` hasta que se inicie sesión.
 
 Ejecuta:
 ```powershell
@@ -76,11 +81,12 @@ Abre `http://localhost:3000`.
 2. Despliega la rama en un hosting Node compatible con Next.js (Node 20.9+).
 3. Configura `VENICE_WALLET_PRIVATE_KEY` como secreto del servidor y `APP_URL` como dominio HTTPS.
 4. Build: `npm run build`; Start: `npm run start`.
-5. No abras el chat al público hasta incorporar login y cuotas/límites de gasto por usuario.
+5. Configura `AVERO_ACCESS_CODE` y `AVERO_SESSION_SECRET` como secretos del hosting, además de la wallet.
+6. Mantén la aplicación privada: el acceso actual usa un código compartido, no cuentas individuales. No la abras al público hasta añadir cuotas persistentes por usuario y límites de gasto.
 
 ## Endpoints de AveroAI
 - `GET /api/providers`: consulta catálogo público de Venice y devuelve estado de wallet.
 - `POST /api/chat`: envía el chat a Venice x402 y retransmite el streaming.
 
 ## Estado de verificación
-La integración está en una rama de desarrollo y PR; no se declara producción ni 100% completada. Aún faltan build en un entorno limpio, prueba real de balance x402, pruebas de respuesta/streaming por modelo y controles de acceso para despliegue público.
+La integración está en una rama de desarrollo y PR; no se declara producción ni 100% completada. La rama incorpora acceso privado básico y estética Liquid Glass reforzada. Aún faltan build en un entorno limpio, prueba real de balance x402, pruebas de respuesta/streaming por modelo y controles multiusuario/cuotas para despliegue público. No se ha validado todavía una wallet financiada.
