@@ -1,4 +1,3 @@
-import { createAuthFetch } from "venice-x402-client";
 import type { ModelInfo } from "@/lib/models";
 
 const BASE = "https://api.venice.ai/api/v1";
@@ -61,9 +60,8 @@ function mapModel(row: AnyRecord): ModelInfo | null {
   } as ModelInfo;
 }
 
-async function loadCatalog(walletKey: string): Promise<CatalogResult> {
-  const authFetch = createAuthFetch(walletKey);
-  const response = await authFetch(`${BASE}/models?type=text`, {
+async function loadCatalog(): Promise<CatalogResult> {
+  const response = await fetch(`${BASE}/models?type=text`, {
     method: "GET",
     headers: { accept: "application/json" },
     signal: AbortSignal.timeout(15_000)
@@ -75,7 +73,7 @@ async function loadCatalog(walletKey: string): Promise<CatalogResult> {
 
   let mostUncensoredId: string | undefined;
   try {
-    const traitsResponse = await authFetch(`${BASE}/models/traits?type=text`, {
+    const traitsResponse = await fetch(`${BASE}/models/traits?type=text`, {
       method: "GET",
       headers: { accept: "application/json" },
       signal: AbortSignal.timeout(10_000)
@@ -100,10 +98,10 @@ async function loadCatalog(walletKey: string): Promise<CatalogResult> {
   return { models, mostUncensoredId };
 }
 
-export async function getUncensoredTextCatalog(walletKey: string, force = false): Promise<CatalogResult> {
+export async function getUncensoredTextCatalog(_walletKey?: string, force = false): Promise<CatalogResult> {
   if (!force && cached && cached.expires > Date.now()) return cached.value;
   if (!pending) {
-    pending = loadCatalog(walletKey).then((value) => {
+    pending = loadCatalog().then((value) => {
       cached = { value, expires: Date.now() + 60_000 };
       return value;
     }).finally(() => { pending = null; });
