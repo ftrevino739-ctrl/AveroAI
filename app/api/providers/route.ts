@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { getUncensoredTextCatalog } from "@/lib/venice";
+import { getVeniceTextCatalog } from "@/lib/venice";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -8,13 +8,19 @@ export async function GET(request: NextRequest) {
   const configured = Boolean(process.env.VENICE_WALLET_PRIVATE_KEY || process.env.WALLET_KEY);
   const forceRefresh = new URL(request.url).searchParams.get("refresh") === "1";
   try {
-    const catalog = await getUncensoredTextCatalog(forceRefresh);
+    const catalog = await getVeniceTextCatalog(forceRefresh);
     return Response.json({
       providers: [{ id: "venice", name: "Venice AI", configured, models: catalog.models.length }],
       models: catalog.models,
-      traits: { mostUncensored: catalog.mostUncensoredId || null },
-      connection: { provider: "Venice x402", configured, catalogue: "live", filter: "official-uncensored-only" },
-      policy: "Only models explicitly marked Uncensored by Venice metadata or the official most_uncensored trait are returned."
+      traits: catalog.traits,
+      compatibilityMapping: catalog.compatibilityMapping,
+      connection: {
+        provider: "Venice x402",
+        configured,
+        catalogue: "live",
+        filter: "all-available-text-models"
+      },
+      policy: "Se incluyen todos los modelos de texto disponibles en GET /models?type=text de Venice. El indicador Uncensored solo aparece cuando model_spec.uncensored === true."
     }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     return Response.json({
