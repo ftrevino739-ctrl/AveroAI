@@ -42,7 +42,8 @@ export default function Home(){
   finally{setSending(false);abortRef.current=null;textareaRef.current?.focus();}
  }
  function stop(){abortRef.current?.abort();}
- async function logout(){await fetch("/api/access",{method:"DELETE"});window.location.assign("/access");}\n async function copy(text:string){await navigator.clipboard.writeText(text);setCopied(true);setTimeout(()=>setCopied(false),1300);}
+ async function logout(){await fetch("/api/access",{method:"DELETE"});window.location.assign("/access");}
+ async function copy(text:string){await navigator.clipboard.writeText(text);setCopied(true);setTimeout(()=>setCopied(false),1300);}
  function exportChats(){const blob=new Blob([JSON.stringify(chats,null,2)],{type:"application/json"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="averoai-conversations.json";a.click();URL.revokeObjectURL(url);}
  async function readFile(file?:File){if(!file)return;if(file.size>150_000){setError("El archivo supera el límite de 150 KB.");return;}const content=await file.text();setAttachment(file.name+"\n"+content.slice(0,12000));setError("");}
  return <main className={dark?"app-shell dark":"app-shell"}>
