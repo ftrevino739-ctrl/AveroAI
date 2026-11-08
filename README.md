@@ -4,12 +4,14 @@ AveroAI es la interfaz web propia (marca, experiencia, historial y selector de m
 
 ## Arquitectura de AveroAI
 - **AveroAI es la aplicación:** interfaz Liquid Glass, selector, historial, sesiones, validación de modelos, límites de entrada, control de flujo y streaming.
-- **Motor de conexión propio:** el servidor de AveroAI descubre el catálogo oficial, filtra solo modelos etiquetados Uncensored, valida el ID seleccionado y crea la solicitud de inferencia.
+- **Motor de conexión propio:** el servidor de AveroAI descubre el catálogo oficial, lee los modelos de texto disponibles, sus traits, compatibilidades y metadatos, valida el ID seleccionado y crea la solicitud de inferencia.
 - **Inferencia:** cada modelo se invoca por su ID real en el endpoint oficial de Venice. AveroAI no sustituye los nombres de modelos por una identidad ficticia ni añade un prompt de sistema de Venice (`include_venice_system_prompt: false`).
 - **Límite honesto:** los modelos cerrados siguen ejecutándose en la infraestructura que Venice ofrece; AveroAI no aloja sus pesos. Para alojar modelos nosotros mismos necesitaríamos pesos descargables, GPU, memoria y licencias compatibles. Esta integración sí conecta cada modelo individualmente desde nuestro backend, pero no convierte AveroAI en el dueño de los modelos.
 
-## Catálogo Uncensored
-AveroAI consulta el catálogo vivo `GET /models?type=text` y los traits `GET /models/traits?type=text`. Solo publica modelos con la marca Uncensored/abliterated/heretic en los metadatos oficiales, y rechaza en el backend cualquier ID que no pase el filtro. No hay una lista fija de 13 modelos: el catálogo cambia y se actualiza en vivo. Si Venice no devuelve el catálogo, AveroAI falla cerrado y no ofrece modelos falsamente disponibles.
+## Catálogo oficial de Venice
+AveroAI descubre en vivo `GET /models?type=text`, `GET /models/traits?type=text` y `GET /models/compatibility_mapping?type=text`. El selector incluye todos los modelos de texto disponibles que Venice devuelve, no solo los marcados Uncensored ni modelos de OpenRouter. El distintivo Uncensored se muestra únicamente cuando `model_spec.uncensored === true`. El catálogo también expone contexto, máximo de tokens de salida, capacidades, privacidad, traits y precios publicados por millón de tokens. Los modelos offline se excluyen; las IDs y los modelos cambian según el catálogo vivo. Si Venice no devuelve el catálogo, AveroAI falla cerrado.
+
+Este selector es para modelos de texto/chat. Venice también ofrece catálogos separados de imagen, vídeo, música, TTS, ASR y embeddings; esos modelos no deben enviarse a `/chat/completions` y requieren sus propios flujos de interfaz y endpoints. No se presentan como modelos de chat hasta integrar esos flujos.
 
 ## Sin API keys: qué significa realmente
 Venice x402 permite acceder a las rutas de inferencia sin API key ni cuenta Venice. La identidad se prueba con una firma SIWX de una wallet EVM en Base o Solana; cada solicitud se firma con un nonce nuevo. El consumo se paga con saldo x402 prepagado en USDC. Si la wallet está vinculada a una cuenta Venice con saldo DIEM elegible, Venice consume ese saldo primero.
@@ -65,10 +67,10 @@ Abre `http://localhost:3000`.
 6. Mantén la aplicación privada: el acceso actual usa un código compartido, no cuentas individuales. No la abras al público hasta añadir cuotas persistentes por usuario y límites de gasto.
 
 ## Motor AveroAI y endpoints
-- `GET /api/providers`: descubre el catálogo vivo de Venice, aplica el filtro Uncensored y devuelve metadatos verificados.
-- `POST /api/chat`: valida que el ID esté en el catálogo Uncensored vigente, envía la solicitud desde el servidor y retransmite el streaming.
+- `GET /api/providers`: descubre todos los modelos de texto de Venice y devuelve traits, compatibilidades, capacidades, contexto, salida y precios.
+- `POST /api/chat`: valida que el ID esté en el catálogo de texto vigente, envía la solicitud desde el servidor y retransmite el streaming.
 - El navegador nunca recibe la clave privada de la wallet.
 - No se inyecta un prompt oculto de AveroAI ni el prompt por defecto de Venice: se transmiten los mensajes de la conversación y los parámetros explícitos del usuario.
 
 ## Estado de verificación
-La integración está en una rama de desarrollo y PR; no se declara producción ni 100% completada. La rama incorpora acceso privado básico y estética Liquid Glass reforzada. La conexión dinámica de modelos Uncensored, validación estricta del ID y el motor server-side ya están implementados en la rama. GitHub Actions ya pasó para el commit actual: typecheck, lint, build de Next.js y Docker build. Aún faltan la prueba real de balance x402, smoke tests con wallet financiada para cada modelo y controles multiusuario/cuotas persistentes para despliegue público. La compilación no demuestra por sí sola que el catálogo x402 o cada modelo responda correctamente.
+La integración está en una rama de desarrollo y PR; no se declara producción ni 100% completada. La rama incorpora acceso privado básico y estética Liquid Glass reforzada. La conexión dinámica de todos los modelos de texto de Venice, validación estricta del ID y el motor server-side están implementados en la rama. GitHub Actions ya pasó para el commit actual: typecheck, lint, build de Next.js y Docker build. Aún faltan la prueba real de balance x402, smoke tests con wallet financiada para cada modelo y controles multiusuario/cuotas persistentes para despliegue público. La compilación no demuestra por sí sola que el catálogo x402 o cada modelo responda correctamente.
