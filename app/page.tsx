@@ -1,98 +1,67 @@
 "use client";
-
-import { useEffect, useRef, useState } from "react";
-import { ArrowUp, Atom, Check, ChevronDown, Command, Menu, MessageSquarePlus, Paperclip, PanelLeftClose, Settings2, Sparkles, Square, Trash2 } from "lucide-react";
+import { useEffect,useMemo,useRef,useState } from "react";
+import { Activity, ArrowDown, ArrowUp, Atom, Check, ChevronDown, CircleHelp, Command, Copy, Download, FileText, Globe2, Menu, MessageSquarePlus, Moon, Paperclip, PanelLeftClose, Plus, Search, Settings2, Sparkles, Sun, Trash2, X, Zap } from "lucide-react";
 import { models } from "@/lib/models";
 
-type Message = { role: "user" | "assistant"; content: string };
-type Chat = { id: string; title: string; messages: Message[]; updatedAt: number };
+type Message={role:"user"|"assistant";content:string};
+type Chat={id:string;title:string;messages:Message[];updatedAt:number};
+const starters=[{icon:"✳",title:"Think something through",sub:"Explore an idea from every angle."},{icon:"↗",title:"Make a plan",sub:"Turn a goal into clear next steps."},{icon:"⌘",title:"Build something",sub:"Code, create, and solve problems."}];
 
-const starterPrompts = ["Help me understand a complex idea", "Write something worth reading", "Turn a rough idea into a plan"];
-
-export default function Home() {
-  const [chats, setChats] = useState<Chat[]>([]);
-  const [activeId, setActiveId] = useState("");
-  const [modelId, setModelId] = useState(models[0].id);
-  const [modelOpen, setModelOpen] = useState(false);
-  const [input, setInput] = useState("");
-  const [sending, setSending] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [error, setError] = useState("");
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const activeChat = chats.find(c => c.id === activeId);
-  const selectedModel = models.find(m => m.id === modelId) || models[0];
-
-  useEffect(() => {
-    const saved = localStorage.getItem("avero-chats");
-    if (saved) {
-      try { const parsed = JSON.parse(saved) as Chat[]; setChats(parsed); if (parsed[0]) setActiveId(parsed[0].id); } catch { localStorage.removeItem("avero-chats"); }
-    }
-  }, []);
-  useEffect(() => { if (chats.length) localStorage.setItem("avero-chats", JSON.stringify(chats)); else localStorage.removeItem("avero-chats"); }, [chats]);
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [activeChat?.messages, sending]);
-
-  function newChat() {
-    const id = crypto.randomUUID();
-    setChats(prev => [{ id, title: "New conversation", messages: [], updatedAt: Date.now() }, ...prev]);
-    setActiveId(id); setError(""); setInput("");
-  }
-  function deleteChat(id: string) {
-    const next = chats.filter(c => c.id !== id);
-    setChats(next); if (activeId === id) setActiveId(next[0]?.id || "");
-  }
-  async function send(text = input) {
-    const content = text.trim();
-    if (!content || sending) return;
-    const id = activeId || crypto.randomUUID();
-    const existing = chats.find(c => c.id === id);
-    const prior = existing?.messages || [];
-    const nextMessages: Message[] = [...prior, { role: "user", content }, { role: "assistant", content: "" }];
-    const title = existing?.title === "New conversation" || !existing ? content.slice(0, 42) : existing.title;
-    setChats(prev => existing ? prev.map(c => c.id === id ? { ...c, title, messages: nextMessages, updatedAt: Date.now() } : c) : [{ id, title, messages: nextMessages, updatedAt: Date.now() }, ...prev]);
-    setActiveId(id); setInput(""); setSending(true); setError("");
-    try {
-      const response = await fetch("/api/chat", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ model: modelId, messages: [...prior, { role: "user", content }] }) });
-      if (!response.ok) { const data = await response.json(); throw new Error(data.error || "No se pudo conectar con el proveedor."); }
-      if (!response.body) throw new Error("El navegador no recibió una respuesta en streaming.");
-      const reader = response.body.getReader(); const decoder = new TextDecoder();
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        const chunk = decoder.decode(value, { stream: true });
-        setChats(prev => prev.map(c => c.id === id ? { ...c, messages: c.messages.map((m, i) => i === c.messages.length - 1 ? { ...m, content: m.content + chunk } : m) } : c));
-      }
-    } catch (e) {
-      const message = e instanceof Error ? e.message : "Error inesperado.";
-      setError(message);
-      setChats(prev => prev.map(c => c.id === id ? { ...c, messages: c.messages.slice(0, -1) } : c));
-    } finally { setSending(false); textareaRef.current?.focus(); }
-  }
-
-  return (
-    <main className="app-shell">
-      {sidebarOpen && <aside className="sidebar">
-        <div className="brand"><div className="brand-mark"><Atom size={19} strokeWidth={1.8}/></div><span>avero<span className="brand-ai">ai</span></span><button className="icon-button sidebar-toggle" onClick={() => setSidebarOpen(false)} aria-label="Close sidebar"><PanelLeftClose size={17}/></button></div>
-        <button className="new-chat" onClick={newChat}><MessageSquarePlus size={17}/> New conversation <span>⌘ K</span></button>
-        <div className="side-label">YOUR SPACE</div>
-        <div className="chat-list">{chats.map(chat => <div key={chat.id} className={chat.id === activeId ? "chat-item active" : "chat-item"}><button onClick={() => { setActiveId(chat.id); setError(""); }}>{chat.title}</button><button className="delete-chat" onClick={() => deleteChat(chat.id)} aria-label="Delete conversation"><Trash2 size={14}/></button></div>)}</div>
-        <div className="sidebar-bottom"><div className="user-avatar">A</div><div className="user-meta"><strong>Personal workspace</strong><span>Free space</span></div><button className="icon-button" aria-label="Settings"><Settings2 size={17}/></button></div>
-      </aside>}
-      <section className="workspace">
-        <header className="topbar">
-          <div className="topbar-left">{!sidebarOpen && <button className="icon-button" onClick={() => setSidebarOpen(true)} aria-label="Open sidebar"><Menu size={18}/></button>}<span className="breadcrumb">Workspace <span>/</span> <b>{activeChat?.title || "New conversation"}</b></span></div>
-          <div className="topbar-right"><span className="status-dot"/> All systems ready <span className="top-divider"/> <button className="icon-button" aria-label="Settings"><Settings2 size={17}/></button></div>
-        </header>
-        <div className="model-wrap"><button className="model-select" onClick={() => setModelOpen(!modelOpen)}><span className="model-orb"><Sparkles size={14}/></span><span><small>MODEL</small><strong>{selectedModel.name}</strong></span><ChevronDown size={15}/></button>
-          {modelOpen && <div className="model-menu">{models.map(model => <button key={model.id} onClick={() => { setModelId(model.id); setModelOpen(false); }} className={model.id === modelId ? "model-option chosen" : "model-option"}><span className="model-option-icon"><Sparkles size={14}/></span><span><strong>{model.name}</strong><small>{model.provider} · {model.description}</small></span>{model.id === modelId && <Check size={15}/>}</button>)}</div>}
-        </div>
-        <div className="conversation">
-          {!activeChat?.messages.length ? <div className="welcome"><div className="welcome-symbol"><Atom size={31} strokeWidth={1.4}/><span/></div><div className="eyebrow">A NEW KIND OF THINKING SPACE</div><h1>One space.<br/><em>Every intelligence.</em></h1><p>Meet your ideas with the right intelligence.<br/>What would you like to explore today?</p><div className="prompt-grid">{starterPrompts.map((prompt, i) => <button key={prompt} onClick={() => send(prompt)}><span>0{i+1}</span>{prompt}<ArrowUp size={15}/></button>)}</div></div> :
-            <div className="messages">{activeChat.messages.map((message, i) => <article className={message.role === "user" ? "message user-message" : "message assistant-message"} key={i}><div className="message-avatar">{message.role === "user" ? "Y" : <Atom size={16}/>}</div><div className="message-body"><div className="message-label">{message.role === "user" ? "YOU" : selectedModel.name.toUpperCase()}</div><div className="message-content">{message.content || (sending && i === activeChat.messages.length - 1 ? <span className="typing"><i/><i/><i/></span> : "")}</div></div></article>)}<div ref={bottomRef}/></div>}
-        </div>
-        {error && <div className="error-banner">{error}</div>}
-        <div className="composer-area"><div className="composer"><textarea ref={textareaRef} value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} placeholder="Ask anything. Start anywhere..." rows={1}/><div className="composer-footer"><div className="composer-tools"><button className="icon-button" aria-label="Attach file" title="Attachments coming soon"><Paperclip size={17}/></button><span className="composer-hint"><Command size={11}/> Enter to send · Shift + Enter for a new line</span></div><button className="send-button" onClick={() => send()} disabled={!input.trim() || sending} aria-label="Send message">{sending ? <Square size={14} fill="currentColor"/> : <ArrowUp size={17}/>}</button></div></div><div className="disclaimer">AveroAI can make mistakes. Verify important information.</div></div>
-      </section>
-    </main>
-  );
+export default function Home(){
+ const [chats,setChats]=useState<Chat[]>([]),[activeId,setActiveId]=useState(""),[hydrated,setHydrated]=useState(false);
+ const [modelId,setModelId]=useState(models[0].id),[modelOpen,setModelOpen]=useState(false),[modelQuery,setModelQuery]=useState("");
+ const [input,setInput]=useState(""),[sending,setSending]=useState(false),[sidebarOpen,setSidebarOpen]=useState(true),[settingsOpen,setSettingsOpen]=useState(false),[dark,setDark]=useState(false),[error,setError]=useState("");
+ const [attachment,setAttachment]=useState(""),[copied,setCopied]=useState(false);
+ const bottomRef=useRef<HTMLDivElement>(null),textareaRef=useRef<HTMLTextAreaElement>(null),fileRef=useRef<HTMLInputElement>(null),abortRef=useRef<AbortController|null>(null);
+ const activeChat=chats.find(c=>c.id===activeId),selectedModel=models.find(m=>m.id===modelId)||models[0];
+ const filteredModels=useMemo(()=>models.filter(m=>(m.name+" "+m.provider+" "+m.description).toLowerCase().includes(modelQuery.toLowerCase())),[modelQuery]);
+ useEffect(()=>{try{const raw=localStorage.getItem("avero-chats");if(raw){const parsed=JSON.parse(raw) as Chat[];if(Array.isArray(parsed)){setChats(parsed);if(parsed[0])setActiveId(parsed[0].id);}}setDark(localStorage.getItem("avero-theme")==="dark");}catch{localStorage.removeItem("avero-chats");}setHydrated(true);},[]);
+ useEffect(()=>{if(hydrated)localStorage.setItem("avero-chats",JSON.stringify(chats));},[chats,hydrated]);
+ useEffect(()=>{if(hydrated)localStorage.setItem("avero-theme",dark?"dark":"light");},[dark,hydrated]);
+ useEffect(()=>{bottomRef.current?.scrollIntoView({behavior:"smooth"});},[activeChat?.messages,sending]);
+ function newChat(){const id=crypto.randomUUID();setChats(p=>[{id,title:"Nueva conversación",messages:[],updatedAt:Date.now()},...p]);setActiveId(id);setError("");setInput("");}
+ function removeChat(id:string){setChats(p=>p.filter(c=>c.id!==id));if(activeId===id)setActiveId(chats.find(c=>c.id!==id)?.id||"");}
+ async function send(value=input){
+  const text=value.trim();if((!text&&!attachment)||sending)return;
+  const prompt=attachment?text+"\n\n[Archivo adjunto: "+attachment+"]":text;
+  const id=activeId||crypto.randomUUID(),old=chats.find(c=>c.id===id),prior=old?.messages||[];
+  const title=old?.title==="Nueva conversación"||!old?prompt.slice(0,46):old.title;
+  const next=[...prior,{role:"user" as const,content:prompt},{role:"assistant" as const,content:""}];
+  setChats(p=>old?p.map(c=>c.id===id?{...c,title,messages:next,updatedAt:Date.now()}:c):[{id,title,messages:next,updatedAt:Date.now()},...p]);
+  setActiveId(id);setInput("");setAttachment("");setSending(true);setError("");
+  const controller=new AbortController();abortRef.current=controller;
+  try{
+   const res=await fetch("/api/chat",{method:"POST",headers:{"content-type":"application/json"},signal:controller.signal,body:JSON.stringify({model:modelId,messages:[...prior,{role:"user",content:prompt}]})});
+   if(!res.ok){const data=await res.json().catch(()=>({}));throw new Error(data.error||"No se pudo conectar con el proveedor.");}
+   if(!res.body)throw new Error("El proveedor no devolvió una respuesta.");
+   const reader=res.body.getReader(),decoder=new TextDecoder();
+   while(true){const {done,value}=await reader.read();if(done)break;const chunk=decoder.decode(value,{stream:true});if(chunk)setChats(p=>p.map(c=>c.id===id?{...c,messages:c.messages.map((m,i)=>i===c.messages.length-1?{...m,content:m.content+chunk}:m)}:c));}
+  }catch(e){if(e instanceof Error&&e.name==="AbortError"){setChats(p=>p.map(c=>c.id===id?{...c,messages:c.messages.map((m,i)=>i===c.messages.length-1&&!m.content?{...m,content:"Generación detenida."}:m)}:c));}else{setError(e instanceof Error?e.message:"Error inesperado.");setChats(p=>p.map(c=>c.id===id?{...c,messages:c.messages.slice(0,-1)}:c));}}
+  finally{setSending(false);abortRef.current=null;textareaRef.current?.focus();}
+ }
+ function stop(){abortRef.current?.abort();}
+ async function copy(text:string){await navigator.clipboard.writeText(text);setCopied(true);setTimeout(()=>setCopied(false),1300);}
+ function exportChats(){const blob=new Blob([JSON.stringify(chats,null,2)],{type:"application/json"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="averoai-conversations.json";a.click();URL.revokeObjectURL(url);}
+ async function readFile(file?:File){if(!file)return;if(file.size>150_000){setError("El archivo supera el límite de 150 KB.");return;}const content=await file.text();setAttachment(file.name+"\n"+content.slice(0,12000));setError("");}
+ return <main className={dark?"app-shell dark":"app-shell"}>
+  {sidebarOpen&&<aside className="sidebar"><div className="brand"><div className="brand-mark"><Atom size={19}/></div><span>avero<span className="brand-ai">ai</span></span><button className="icon-button sidebar-toggle" onClick={()=>setSidebarOpen(false)} aria-label="Ocultar menú"><PanelLeftClose size={17}/></button></div>
+   <button className="new-chat" onClick={newChat}><MessageSquarePlus size={17}/> Nueva conversación <span>⌘ K</span></button>
+   <div className="side-label">TU ESPACIO</div><div className="chat-list">{chats.map(c=><div key={c.id} className={c.id===activeId?"chat-item active":"chat-item"}><button onClick={()=>{setActiveId(c.id);setError("");}}>{c.title}</button><button className="delete-chat" onClick={()=>removeChat(c.id)} aria-label="Eliminar"><Trash2 size={14}/></button></div>)}</div>
+   <div className="sidebar-bottom"><div className="user-avatar">A</div><div className="user-meta"><strong>Espacio personal</strong><span>Historial local · Este dispositivo</span></div><button className="icon-button" onClick={()=>setSettingsOpen(true)} aria-label="Configuración"><Settings2 size={17}/></button></div>
+  </aside>}
+  <section className="workspace"><header className="topbar"><div className="topbar-left">{!sidebarOpen&&<button className="icon-button" onClick={()=>setSidebarOpen(true)} aria-label="Mostrar menú"><Menu size={18}/></button>}<span className="breadcrumb">AveroAI <span>/</span> <b>{activeChat?.title||"Nueva conversación"}</b></span></div><div className="topbar-right"><span className="status-dot"/><span>Espacio listo</span><span className="top-divider"/><button className="icon-button" onClick={()=>setDark(!dark)} aria-label="Cambiar tema">{dark?<Sun size={17}/>:<Moon size={17}/>}</button><button className="icon-button" onClick={()=>setSettingsOpen(true)} aria-label="Configuración"><Settings2 size={17}/></button></div></header>
+   <div className="model-wrap"><button className="model-select" onClick={()=>setModelOpen(!modelOpen)}><span className="model-orb"><Sparkles size={14}/></span><span><small>MODELO ACTUAL</small><strong>{selectedModel.name}</strong></span><ChevronDown size={15}/></button>
+    {modelOpen&&<div className="model-menu"><div className="model-search"><Search size={14}/><input value={modelQuery} onChange={e=>setModelQuery(e.target.value)} placeholder="Buscar modelos..."/></div><div className="model-menu-label">CATÁLOGO INICIAL</div>{filteredModels.map(m=><button key={m.id} onClick={()=>{setModelId(m.id);setModelOpen(false);setModelQuery("");}} className={m.id===modelId?"model-option chosen":"model-option"}><span className="model-option-icon"><Sparkles size={14}/></span><span><strong>{m.name}</strong><small>{m.provider} · {m.description}</small></span>{m.id===modelId&&<Check size={15}/>}</button>)}{!filteredModels.length&&<p className="empty-search">No hay coincidencias.</p>}<button className="model-explore" onClick={()=>{setModelOpen(false);setSettingsOpen(true);}}>Explorar proveedores y conexiones <ArrowUp size={13}/></button></div>}
+   </div>
+   <div className="conversation">{!activeChat?.messages.length?<div className="welcome"><div className="welcome-symbol"><Atom size={31}/><span/></div><div className="eyebrow">TU ESPACIO DE INTELIGENCIA</div><h1>Una idea.<br/><em>Muchas posibilidades.</em></h1><p>Un solo lugar para trabajar con distintos modelos de IA.<br/>¿Qué te gustaría crear hoy?</p><div className="prompt-grid">{starters.map((s,i)=><button key={s.title} onClick={()=>send(s.title)}><span>{s.icon}　0{i+1}</span><strong>{s.title}</strong><small>{s.sub}</small><ArrowUp size={15}/></button>)}</div><div className="welcome-note"><Globe2 size={13}/> Elige un modelo y comienza a explorar.</div></div>:<div className="messages">{activeChat.messages.map((m,i)=><article className={m.role==="user"?"message user-message":"message assistant-message"} key={i}><div className="message-avatar">{m.role==="user"?"T":<Atom size={16}/>}</div><div className="message-body"><div className="message-label">{m.role==="user"?"TÚ":selectedModel.name.toUpperCase()}</div><div className="message-content">{m.content||sending&&i===activeChat.messages.length-1?<span className="typing"><i/><i/><i/></span>:m.content}</div>{m.role==="assistant"&&m.content&&<button className="copy-response" onClick={()=>copy(m.content)}><Copy size={13}/>{copied?"Copiado":"Copiar respuesta"}</button>}</div></article>)}<div ref={bottomRef}/></div>}</div>
+   {error&&<div className="error-banner"><CircleHelp size={15}/>{error}<button onClick={()=>setError("")}><X size={14}/></button></div>}
+   <div className="composer-area"><div className="composer">{attachment&&<div className="attachment-chip"><FileText size={14}/><span>{attachment.split("\n")[0]}</span><button onClick={()=>setAttachment("")}><X size={13}/></button></div>}<textarea ref={textareaRef} value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send();}}} placeholder="Escribe tu mensaje..." rows={1}/><div className="composer-footer"><div className="composer-tools"><button className="icon-button" onClick={()=>fileRef.current?.click()} aria-label="Adjuntar archivo"><Paperclip size={17}/></button><input ref={fileRef} type="file" accept=".txt,.md,.csv,.json,.log" hidden onChange={e=>readFile(e.target.files?.[0])}/><span className="composer-hint"><Command size={11}/> Enter para enviar · Shift + Enter para salto</span></div>{sending?<button className="send-button stop-button" onClick={stop} aria-label="Detener"><span/></button>:<button className="send-button" onClick={()=>send()} disabled={!input.trim()&&!attachment} aria-label="Enviar"><ArrowUp size={17}/></button>}</div></div><div className="disclaimer">Las respuestas pueden contener errores. Verifica la información importante.</div></div>
+  </section>
+  {settingsOpen&&<div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setSettingsOpen(false);}}><section className="settings-modal"><header><div><span className="eyebrow">AVEROAI</span><h2>Configuración</h2><p>Gestiona tu espacio y las conexiones de IA.</p></div><button className="icon-button" onClick={()=>setSettingsOpen(false)}><X size={18}/></button></header>
+    <div className="settings-section"><div className="settings-title"><Activity size={16}/> Proveedores y modelos</div><p className="settings-copy">AveroAI utiliza tus propias API keys, guardadas exclusivamente en el servidor. El estado se determina al ejecutar una solicitud.</p>{["OpenAI","Anthropic","Google Gemini","OpenRouter","Endpoint personalizado"].map((name,i)=><div className="provider-row" key={name}><div className="provider-icon">{["O","A","G","↗","◇"][i]}</div><div><strong>{name}</strong><small>{i===4?"Compatible con OpenAI API": "Conecta con una API key de proveedor"}</small></div><span className="provider-state">Variable de entorno</span></div>)}</div>
+    <div className="settings-section"><div className="settings-title"><Zap size={16}/> Modelos disponibles</div><div className="catalog-grid">{models.map(m=><div className="catalog-card" key={m.id}><div><strong>{m.name}</strong><span>{m.provider}</span></div><small>{m.description}</small><code>{m.id}</code></div>)}</div><p className="settings-footnote">El catálogo es una selección inicial. La disponibilidad, los permisos y el precio dependen de tu cuenta y del proveedor.</p></div>
+    <div className="settings-section"><div className="settings-title"><Settings2 size={16}/> Preferencias</div><div className="preference-row"><div><strong>Apariencia</strong><small>Cambia entre tema claro y oscuro.</small></div><button className="secondary-button" onClick={()=>setDark(!dark)}>{dark?<Sun size={14}/>:<Moon size={14}/>} {dark?"Claro":"Oscuro"}</button></div><div className="preference-row"><div><strong>Exportar conversaciones</strong><small>Descarga tu historial local en JSON.</small></div><button className="secondary-button" onClick={exportChats}><Download size={14}/> Exportar</button></div></div>
+    <div className="settings-note">Las API keys no se introducen aquí ni se guardan en el navegador. Añádelas como variables de entorno privadas en tu servidor. Consulta <a href="https://github.com/ftrevino739-ctrl/AveroAI" target="_blank" rel="noreferrer">el repositorio</a> para la guía de configuración.</div>
+   </section></div>}
+ </main>;
 }
