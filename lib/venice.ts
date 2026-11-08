@@ -98,7 +98,7 @@ async function loadCatalog(): Promise<CatalogResult> {
   return { models, mostUncensoredId };
 }
 
-export async function getUncensoredTextCatalog(_walletKey?: string, force = false): Promise<CatalogResult> {
+export async function getUncensoredTextCatalog(force = false): Promise<CatalogResult> {
   if (!force && cached && cached.expires > Date.now()) return cached.value;
   if (!pending) {
     pending = loadCatalog().then((value) => {
