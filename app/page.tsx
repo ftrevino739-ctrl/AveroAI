@@ -1,6 +1,6 @@
 "use client";
 import { useEffect,useMemo,useRef,useState } from "react";
-import { Activity, ArrowDown, ArrowUp, Atom, Check, ChevronDown, CircleHelp, Command, Copy, Download, FileText, Globe2, Menu, MessageSquarePlus, Moon, Paperclip, PanelLeftClose, Plus, Search, Settings2, Sparkles, Sun, Trash2, X, Zap } from "lucide-react";
+import { Activity, ArrowUp, Atom, Check, ChevronDown, CircleHelp, Command, Copy, Download, FileText, Globe2, Menu, MessageSquarePlus, Moon, Paperclip, PanelLeftClose, Search, Settings2, Sparkles, Sun, Trash2, X, Zap } from "lucide-react";
 import { models } from "@/lib/models";
 
 type Message={role:"user"|"assistant";content:string;modelName?:string};
@@ -18,7 +18,7 @@ export default function Home(){
  useEffect(()=>{try{const raw=localStorage.getItem("avero-chats");if(raw){const parsed=JSON.parse(raw) as Chat[];if(Array.isArray(parsed)){setChats(parsed);if(parsed[0])setActiveId(parsed[0].id);}}setDark(localStorage.getItem("avero-theme")==="dark");}catch{localStorage.removeItem("avero-chats");}setHydrated(true);},[]);
  useEffect(()=>{if(hydrated)localStorage.setItem("avero-chats",JSON.stringify(chats));},[chats,hydrated]);
  useEffect(()=>{if(hydrated)localStorage.setItem("avero-theme",dark?"dark":"light");},[dark,hydrated]);
- useEffect(()=>{if(settingsOpen){fetch("/api/providers").then(r=>r.json()).then(data=>{const next:Record<string,boolean>={};for(const p of data.providers||[])next[p.id]=Boolean(p.configured);setProviderStatus(next);if(Array.isArray(data.models)&&data.models.length)setAvailableModels(data.models);}).catch(()=>setProviderStatus({}));}},[settingsOpen]);
+ useEffect(()=>{fetch("/api/providers").then(r=>r.json()).then(data=>{const next:Record<string,boolean>={};for(const p of data.providers||[])next[p.id]=Boolean(p.configured);setProviderStatus(next);if(Array.isArray(data.models)&&data.models.length)setAvailableModels(data.models);}).catch(()=>setProviderStatus({}));},[]);
  useEffect(()=>{bottomRef.current?.scrollIntoView({behavior:"smooth"});},[activeChat?.messages,sending]);
  useEffect(()=>{const onKey=(e:KeyboardEvent)=>{if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==="k"){e.preventDefault();newChat();}if(e.key==="Escape"){setModelOpen(false);setSettingsOpen(false);}};window.addEventListener("keydown",onKey);return()=>window.removeEventListener("keydown",onKey);},[]);
  function newChat(){const id=crypto.randomUUID();setChats(p=>[{id,title:"Nueva conversación",messages:[],updatedAt:Date.now()},...p]);setActiveId(id);setError("");setInput("");}
