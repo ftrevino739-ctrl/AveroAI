@@ -37,7 +37,9 @@ Requiere Node.js 20.9 o superior y una API key válida de al menos un proveedor.
 | `GOOGLE_API_KEY` | Gemini |
 | `OPENROUTER_API_KEY` | OpenRouter |
 | `CUSTOM_BASE_URL` | URL base del endpoint compatible personalizado |
-| `CUSTOM_API_KEY` | Clave del endpoint personalizado |\n| `CUSTOM_MODEL_ID` | Identificador de modelo del endpoint personalizado |\n| `CUSTOM_MODEL_NAME` | Nombre visible del modelo personalizado |
+| `CUSTOM_API_KEY` | Clave del endpoint personalizado |
+| `CUSTOM_MODEL_ID` | Identificador de modelo del endpoint personalizado |
+| `CUSTOM_MODEL_NAME` | Nombre visible del modelo personalizado |
 | `APP_URL` | URL pública de AveroAI; se envía como metadato a OpenRouter |
 
 No guardes claves reales en Git ni en variables del cliente como `NEXT_PUBLIC_*`. En producción, configúralas en el panel privado de variables de entorno del hosting.
