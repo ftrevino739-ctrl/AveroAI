@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
 const COOKIE = "avero_session";
-const encoder = new TextEncoder();\nconst attempts = new Map<string, { count: number; reset: number }>();
+const encoder = new TextEncoder();
+const attempts = new Map<string, { count: number; reset: number }>();
 
 async function signature(payload: string, secret: string) {
   const key = await crypto.subtle.importKey("raw", encoder.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
@@ -10,7 +11,12 @@ async function signature(payload: string, secret: string) {
 }
 
 export async function POST(request: NextRequest) {
-  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";\n  const now = Date.now();\n  const attempt = attempts.get(ip);\n  if (attempt && attempt.reset > now && attempt.count >= 5) return NextResponse.json({ error: "Demasiados intentos. Espera 15 minutos." }, { status: 429 });\n  if (!attempt || attempt.reset <= now) attempts.set(ip, { count: 1, reset: now + 15 * 60_000 });\n  else { attempt.count++; attempts.set(ip, attempt); }\n  const accessCode = process.env.AVERO_ACCESS_CODE;
+  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+  const now = Date.now();
+  const attempt = attempts.get(ip);
+  if (attempt && attempt.reset > now && attempt.count >= 5) return NextResponse.json({ error: "Demasiados intentos. Espera 15 minutos." }, { status: 429 });
+  if (!attempt || attempt.reset <= now) attempts.set(ip, { count: 1, reset: now + 15 * 60_000 });
+  else { attempt.count++; attempts.set(ip, attempt); }\n  const accessCode = process.env.AVERO_ACCESS_CODE;
   const secret = process.env.AVERO_SESSION_SECRET;
   if (!accessCode || !secret) return NextResponse.json({ error: "El administrador debe configurar AVERO_ACCESS_CODE y AVERO_SESSION_SECRET en el servidor." }, { status: 503 });
   let body: { code?: unknown } = {};
