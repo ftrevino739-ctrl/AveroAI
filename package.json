@@ -15,7 +15,7 @@
     "react-dom": "19.1.10",
     "lucide-react": "^0.468.0",
     "sharp": "^0.35.5",
-    "venice-x402-client": "^1.0.0"
+    "venice-x402-client": "^0.2.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
