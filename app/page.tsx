@@ -37,7 +37,7 @@ export default function Home(){
    if(!res.ok){const data=await res.json().catch(()=>({}));throw new Error(data.error||"No se pudo conectar con el proveedor.");}
    if(!res.body)throw new Error("El proveedor no devolvió una respuesta.");
    const reader=res.body.getReader(),decoder=new TextDecoder();
-   while(true){const {done,value}=await reader.read();if(done)break;const chunk=decoder.decode(value,{stream:true});if(chunk)setChats(p=>p.map(c=>c.id===id?{...c,messages:c.messages.map((m,i)=>i===c.messages.length-1?{...m,content:m.content+chunk}:m)}:c));}
+   while(true){const {done,value}=await reader.read();if(done)break;const chunk=decoder.decode(value,{stream:true});if(chunk)setChats(p=>p.map(c=>c.id===id?{...c,messages:c.messages.map((m,i)=>i===c.messages.length-1?{...m,content:m.content+chunk}:m)}:c));}const tail=decoder.decode();if(tail)setChats(p=>p.map(c=>c.id===id?{...c,messages:c.messages.map((m,i)=>i===c.messages.length-1?{...m,content:m.content+tail}:m)}:c));
   }catch(e){if(e instanceof Error&&e.name==="AbortError"){setChats(p=>p.map(c=>c.id===id?{...c,messages:c.messages.map((m,i)=>i===c.messages.length-1&&!m.content?{...m,content:"Generación detenida."}:m)}:c));}else{setError(e instanceof Error?e.message:"Error inesperado.");setChats(p=>p.map(c=>c.id===id?{...c,messages:c.messages.slice(0,-1)}:c));}}
   finally{setSending(false);abortRef.current=null;textareaRef.current?.focus();}
  }
