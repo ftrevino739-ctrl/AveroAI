@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
 
   let selectedModel;
   try {
-    const catalog = await getUncensoredTextCatalog(walletKey);
+    const catalog = await getUncensoredTextCatalog();
     selectedModel = catalog.models.find((model) => model.id === modelId);
   } catch {
     return error("No se pudo verificar el modelo contra el catálogo oficial de Venice. No se enviará la solicitud.", 503);
