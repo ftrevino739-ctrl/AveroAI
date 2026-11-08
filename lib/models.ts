@@ -10,6 +10,7 @@ export const models: ModelInfo[] = [
   {id:"claude-fable-5-1",name:"Claude Fable 5.1",provider:"Venice AI",providerId:"venice",description:"Reasoning · Vision · Code",category:"Frontier",context:"1M"},
   {id:"z-ai-glm-5-3-flash",name:"GLM 5.3 Flash",provider:"Venice AI",providerId:"venice",description:"Fast · Reasoning · Vision · Code",category:"Fast",context:"1049K"},
   {id:"grok-4-6",name:"Grok 4.6",provider:"Venice AI",providerId:"venice",description:"Reasoning · Vision · Code",category:"Frontier",context:"500K"},
+  {id:"deepseek-v4-1-flash-1017",name:"DeepSeek V4.1 Flash (1017)",provider:"Venice AI",providerId:"venice",description:"Reasoning · Vision · Code",category:"Fast",context:"1M"},
   {id:"deepseek-v4-1-flash-1017-uncensored",name:"DeepSeek V4.1 Flash (1017) Uncensored",provider:"Venice AI",providerId:"venice",description:"Uncensored · Reasoning · Vision · Code",category:"Fast",context:"1M",uncensored:true},
   {id:"claude-opus-5",name:"Claude Opus 5",provider:"Venice AI",providerId:"venice",description:"Reasoning · Vision · Code",category:"Frontier",context:"1M"},
   {id:"claude-sonnet-5",name:"Claude Sonnet 5",provider:"Venice AI",providerId:"venice",description:"Reasoning · Vision · Code",category:"Frontier",context:"1M"},
