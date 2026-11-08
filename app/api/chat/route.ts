@@ -7,7 +7,7 @@ type Message = { role:"system"|"user"|"assistant"; content:string };
 const hits = new Map<string,{count:number;reset:number}>();
 function ready(id:ProviderId) {
   const env:Record<ProviderId,string|undefined>={openai:process.env.OPENAI_API_KEY,anthropic:process.env.ANTHROPIC_API_KEY,google:process.env.GOOGLE_API_KEY,openrouter:process.env.OPENROUTER_API_KEY,custom:process.env.CUSTOM_API_KEY};
-  return Boolean(env[id] && (id!=="custom" || process.env.CUSTOM_BASE_URL));
+  return Boolean(env[id] && (id!=="custom" || (process.env.CUSTOM_BASE_URL && process.env.CUSTOM_MODEL_ID)));
 }
 function limited(key:string) {
   const now=Date.now(); if(hits.size>2000){for(const [ip,entry] of hits){if(entry.reset<now)hits.delete(ip);}} const item=hits.get(key);
@@ -24,7 +24,7 @@ export async function POST(request:NextRequest) {
   if(!body || typeof body!=="object")return error("Solicitud no válida.",400);
   const data=body as {model?:unknown;messages?:unknown};
   const modelId=typeof data.model==="string"?data.model:"";
-  const model=models.find(m=>m.id===modelId);
+  const model=models.find(m=>m.id===modelId) || (process.env.CUSTOM_MODEL_ID && modelId===process.env.CUSTOM_MODEL_ID ? {id:modelId,name:process.env.CUSTOM_MODEL_NAME||"Custom model",provider:"Custom endpoint",providerId:"custom" as const,description:"OpenAI-compatible custom model",category:"Open" as const,context:"Provider defined"} : undefined);
   if(!model)return error("Modelo no reconocido.",400);
   if(!Array.isArray(data.messages)||data.messages.length<1||data.messages.length>40)return error("La conversación debe contener entre 1 y 40 mensajes.",400);
   const messages=data.messages as Message[];
