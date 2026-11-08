@@ -16,7 +16,8 @@ export async function POST(request: NextRequest) {
   const attempt = attempts.get(ip);
   if (attempt && attempt.reset > now && attempt.count >= 5) return NextResponse.json({ error: "Demasiados intentos. Espera 15 minutos." }, { status: 429 });
   if (!attempt || attempt.reset <= now) attempts.set(ip, { count: 1, reset: now + 15 * 60_000 });
-  else { attempt.count++; attempts.set(ip, attempt); }\n  const accessCode = process.env.AVERO_ACCESS_CODE;
+  else { attempt.count++; attempts.set(ip, attempt); }
+  const accessCode = process.env.AVERO_ACCESS_CODE;
   const secret = process.env.AVERO_SESSION_SECRET;
   if (!accessCode || !secret) return NextResponse.json({ error: "El administrador debe configurar AVERO_ACCESS_CODE y AVERO_SESSION_SECRET en el servidor." }, { status: 503 });
   let body: { code?: unknown } = {};
