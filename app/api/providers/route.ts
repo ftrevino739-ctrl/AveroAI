@@ -1,4 +1,5 @@
-import { NextRequest } from "next/server";\nimport { getUncensoredTextCatalog } from "@/lib/venice";
+import { NextRequest } from "next/server";
+import { getUncensoredTextCatalog } from "@/lib/venice";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,7 +15,8 @@ export async function GET(request: NextRequest) {
     }, { status: 503, headers: { "Cache-Control": "no-store" } });
   }
   try {
-    const forceRefresh = new URL(request.url).searchParams.get("refresh") === "1";\n    const catalog = await getUncensoredTextCatalog(walletKey, forceRefresh);
+    const forceRefresh = new URL(request.url).searchParams.get("refresh") === "1";
+    const catalog = await getUncensoredTextCatalog(walletKey, forceRefresh);
     return Response.json({
       providers: [{ id: "venice", name: "Venice AI", configured: true, models: catalog.models.length }],
       models: catalog.models,
