@@ -8,7 +8,7 @@ export async function GET(request: NextRequest) {
   const configured = Boolean(process.env.VENICE_WALLET_PRIVATE_KEY || process.env.WALLET_KEY);
   const forceRefresh = new URL(request.url).searchParams.get("refresh") === "1";
   try {
-    const catalog = await getUncensoredTextCatalog(undefined, forceRefresh);
+    const catalog = await getUncensoredTextCatalog(forceRefresh);
     return Response.json({
       providers: [{ id: "venice", name: "Venice AI", configured, models: catalog.models.length }],
       models: catalog.models,
