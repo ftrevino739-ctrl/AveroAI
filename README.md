@@ -2,30 +2,14 @@
 
 AveroAI es la interfaz web propia (marca, experiencia, historial y selector de modelos). **La inferencia real y el catálogo de modelos los proporciona Venice AI**, mediante sus endpoints oficiales. No entrenamos ni fingimos tener modelos propios, y no presentamos a AveroAI como si fuera el sitio oficial de Venice.
 
-## Arquitectura real
-- Frontend AveroAI: Next.js, interfaz Liquid Glass y conversaciones locales.
-- Proveedor de inferencia: Venice AI, `https://api.venice.ai/api/v1`.
-- Autenticación sin API key tradicional: Venice x402 / SIWX, mediante una wallet.
-- Modelos: se consultan en el catálogo público de Venice (`GET /models?type=text`) y se muestran en AveroAI; la lista fallback solo permite abrir la interfaz si el catálogo no responde.
-- Chat: `POST /chat/completions` en Venice, con streaming.
+## Arquitectura de AveroAI
+- **AveroAI es la aplicación:** interfaz Liquid Glass, selector, historial, sesiones, validación de modelos, límites de entrada, control de flujo y streaming.
+- **Motor de conexión propio:** el servidor de AveroAI descubre el catálogo oficial, filtra solo modelos etiquetados Uncensored, valida el ID seleccionado y crea la solicitud de inferencia.
+- **Inferencia:** cada modelo se invoca por su ID real en el endpoint oficial de Venice. AveroAI no sustituye los nombres de modelos por una identidad ficticia ni añade un prompt de sistema de Venice (`include_venice_system_prompt: false`).
+- **Límite honesto:** los modelos cerrados siguen ejecutándose en la infraestructura que Venice ofrece; AveroAI no aloja sus pesos. Para alojar modelos nosotros mismos necesitaríamos pesos descargables, GPU, memoria y licencias compatibles. Esta integración sí conecta cada modelo individualmente desde nuestro backend, pero no convierte AveroAI en el dueño de los modelos.
 
-## Modelos solicitados
-Estos identificadores están publicados en el catálogo oficial de Venice consultado el 8 de noviembre de 2026:
-- DeepSeek V4.1 Flash Uncensored — `deepseek-v4-1-flash-uncensored`
-- DeepSeek V4.1 Flash (1017) — `deepseek-v4-1-flash-1017`
-- DeepSeek V4.1 Flash (1017) Uncensored — `deepseek-v4-1-flash-1017-uncensored`
-- Kimi K2.5 — `kimi-k2-5` (Retiring)
-- Kimi K3 — `kimi-k3`
-- Claude Fable 5.1 — `claude-fable-5-1`
-- Claude Opus 5 — `claude-opus-5`
-- Claude Sonnet 5 — `claude-sonnet-5`
-- Claude Opus 4.7 — `claude-opus-4-7`
-- Claude Sonnet 4.6 — `claude-sonnet-4-6`
-- GLM 5.3 Flash — `z-ai-glm-5-3-flash`
-- Grok 4.3 — `grok-4-3`
-- Grok 4.6 — `grok-4-6`
-
-El catálogo oficial puede cambiar; la respuesta de `GET /models` es la autoridad para saber qué está disponible ahora. AveroAI no debe mostrar un modelo como operativo si Venice lo ha retirado o no lo devuelve.
+## Catálogo Uncensored
+AveroAI consulta el catálogo vivo `GET /models?type=text` y los traits `GET /models/traits?type=text`. Solo publica modelos con la marca Uncensored/abliterated/heretic en los metadatos oficiales, y rechaza en el backend cualquier ID que no pase el filtro. No hay una lista fija de 13 modelos: el catálogo cambia y se actualiza en vivo. Si Venice no devuelve el catálogo, AveroAI falla cerrado y no ofrece modelos falsamente disponibles.
 
 ## Sin API keys: qué significa realmente
 Venice x402 permite acceder a las rutas de inferencia sin API key ni cuenta Venice. La identidad se prueba con una firma SIWX de una wallet EVM en Base o Solana; cada solicitud se firma con un nonce nuevo. El consumo se paga con saldo x402 prepagado en USDC. Si la wallet está vinculada a una cuenta Venice con saldo DIEM elegible, Venice consume ese saldo primero.
@@ -33,11 +17,7 @@ Venice x402 permite acceder a las rutas de inferencia sin API key ni cuenta Veni
 **x402 no significa tokens ilimitados ni una suscripción Max gratuita.** El saldo x402/USDC se consume por uso y por modelo. Los límites de contexto publicados (por ejemplo 1M) no son una cuota mensual ni equivalen a 1M tokens de salida.
 
 ## Venice Max y el requisito que no se puede ocultar
-La página de precios de Venice muestra que Max cuesta US$200/mes e incluye 22,500 créditos mensuales, y describe acceso a la API mediante créditos. Sin embargo, la documentación de autenticación de Venice separa:
-- API estándar: API key de la cuenta, que usa sus saldos USD/DIEM y permite consultar facturación.
-- x402: firma de wallet sin API key, que usa saldo USDC x402 o saldo DIEM vinculado.
-
-La documentación pública que revisamos **no garantiza que los 22,500 créditos del plan Max se apliquen a solicitudes x402**. Por eso AveroAI no promete utilizar los créditos Max con x402. Si la prioridad absoluta es gastar los créditos del plan Max, habrá que confirmar con Venice si ese saldo se puede consumir con x402; si no, el método oficial de API requiere una API key. No hay una forma legítima documentada de combinar “sin API key” + “usar automáticamente todos los créditos Max”.
+La página oficial de precios anuncia para Max un paquete de US$225 de gasto mensual en API (sujeto a los términos y condiciones del plan). La API estándar utiliza una API key de la cuenta. x402 autentica con wallet y saldo USDC/DIEM elegible. La documentación consultada no garantiza que el paquete API de Max se consuma automáticamente a través de x402; AveroAI no afirmará que sí. Si se quiere usar el saldo API de Max, hay que confirmar el flujo de facturación con Venice y probablemente habilitar su API key como método alternativo.
 
 ## Seguridad y acceso privado
 La rama incluye una puerta de acceso con código compartido y cookie de sesión HttpOnly firmada (duración de 7 días). El servidor bloquea la aplicación si faltan `AVERO_ACCESS_CODE` o `AVERO_SESSION_SECRET`. El chat también aplica un límite temporal en memoria por IP. Esto protege una instalación personal o privada, pero **no equivale a cuentas multiusuario ni a cuotas persistentes**: antes de ofrecer el servicio públicamente hacen falta usuarios individuales, cuotas persistentes, rate limiting distribuido y un límite de gasto externo. Usa una wallet x402 dedicada con saldo limitado y sin recarga automática.
@@ -84,9 +64,11 @@ Abre `http://localhost:3000`.
 5. Configura `AVERO_ACCESS_CODE` y `AVERO_SESSION_SECRET` como secretos del hosting, además de la wallet.
 6. Mantén la aplicación privada: el acceso actual usa un código compartido, no cuentas individuales. No la abras al público hasta añadir cuotas persistentes por usuario y límites de gasto.
 
-## Endpoints de AveroAI
-- `GET /api/providers`: consulta catálogo público de Venice y devuelve estado de wallet.
-- `POST /api/chat`: envía el chat a Venice x402 y retransmite el streaming.
+## Motor AveroAI y endpoints
+- `GET /api/providers`: descubre el catálogo vivo de Venice, aplica el filtro Uncensored y devuelve metadatos verificados.
+- `POST /api/chat`: valida que el ID esté en el catálogo Uncensored vigente, envía la solicitud desde el servidor y retransmite el streaming.
+- El navegador nunca recibe la clave privada de la wallet.
+- No se inyecta un prompt oculto de AveroAI ni el prompt por defecto de Venice: se transmiten los mensajes de la conversación y los parámetros explícitos del usuario.
 
 ## Estado de verificación
-La integración está en una rama de desarrollo y PR; no se declara producción ni 100% completada. La rama incorpora acceso privado básico y estética Liquid Glass reforzada. Aún faltan build en un entorno limpio, prueba real de balance x402, pruebas de respuesta/streaming por modelo y controles multiusuario/cuotas para despliegue público. No se ha validado todavía una wallet financiada.
+La integración está en una rama de desarrollo y PR; no se declara producción ni 100% completada. La rama incorpora acceso privado básico y estética Liquid Glass reforzada. La conexión dinámica de modelos Uncensored, validación estricta del ID y el motor server-side ya están implementados en la rama. Aún faltan build/CI satisfactorios, prueba real de balance x402, smoke tests de cada modelo y controles multiusuario/cuotas persistentes para despliegue público. No se ha validado todavía una wallet financiada.
