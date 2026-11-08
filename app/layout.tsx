@@ -3,9 +3,9 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "AveroAI — One space. Every intelligence.",
-  description: "A calm, unified workspace for the world's leading AI models."
+  description: "Un espacio de trabajo para conversar con distintos modelos de inteligencia artificial."
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="en"><body>{children}</body></html>;
+  return <html lang="es"><body>{children}</body></html>;
 }
