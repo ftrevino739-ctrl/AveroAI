@@ -1,9 +1,9 @@
-import { getUncensoredTextCatalog } from "@/lib/venice";
+import { NextRequest } from "next/server";\nimport { getUncensoredTextCatalog } from "@/lib/venice";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const walletKey = process.env.VENICE_WALLET_PRIVATE_KEY || process.env.WALLET_KEY;
   if (!walletKey) {
     return Response.json({
@@ -14,7 +14,7 @@ export async function GET() {
     }, { status: 503, headers: { "Cache-Control": "no-store" } });
   }
   try {
-    const catalog = await getUncensoredTextCatalog(walletKey);
+    const forceRefresh = new URL(request.url).searchParams.get("refresh") === "1";\n    const catalog = await getUncensoredTextCatalog(walletKey, forceRefresh);
     return Response.json({
       providers: [{ id: "venice", name: "Venice AI", configured: true, models: catalog.models.length }],
       models: catalog.models,
