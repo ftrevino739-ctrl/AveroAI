@@ -52,6 +52,10 @@ No guardes claves reales en Git ni en variables del cliente como `NEXT_PUBLIC_*`
 - `npm run build` — compilación de producción.
 - `npm start` — servidor de producción después de compilar.
 
+## Docker
+
+La imagen de producción se construye con `docker build -t averoai .` y se ejecuta con `docker run --env-file .env.local -p 3000:3000 averoai`. El contenedor escucha en el puerto 3000 y usa salida standalone de Next.js.
+
 ## Modelos y acceso
 
 El catálogo es una selección inicial y no garantiza que un modelo siga habilitado, que esté incluido en tu plan o que tu clave tenga permiso para usarlo. Verifica los identificadores y el acceso en el panel/documentación de cada proveedor. Los precios y límites los determina el proveedor. AveroAI enruta solicitudes autorizadas; no evita suscripciones, facturación ni controles de acceso.
