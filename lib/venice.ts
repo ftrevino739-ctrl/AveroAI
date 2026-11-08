@@ -2,103 +2,133 @@ import type { ModelInfo } from "@/lib/models";
 
 const BASE = "https://api.venice.ai/api/v1";
 type AnyRecord = Record<string, any>;
-type CatalogResult = { models: ModelInfo[]; mostUncensoredId?: string };
+export type VeniceTextCatalog = {
+  models: ModelInfo[];
+  traits: Record<string, string>;
+  compatibilityMapping: Record<string, string>;
+  mostUncensoredId?: string;
+};
 
-let cached: { expires: number; value: CatalogResult } | null = null;
-let pending: Promise<CatalogResult> | null = null;
+let cached: { expires: number; value: VeniceTextCatalog } | null = null;
+let pending: Promise<VeniceTextCatalog> | null = null;
 
-function isExplicitlyUncensored(row: AnyRecord, spec: AnyRecord): boolean {
-  const caps = spec.capabilities || row.capabilities;
-  if (spec.uncensored === true || spec.isUncensored === true || row.uncensored === true || row.isUncensored === true) return true;
-  if (Array.isArray(caps) && caps.some((v) => typeof v === "string" && /uncensored/i.test(v))) return true;
-  if (caps && typeof caps === "object" && Object.entries(caps).some(([key, value]) => /uncensored/i.test(key) && (value === true || value === "true" || value === 1 || value === "Uncensored"))) return true;
-  const traits = [spec.traits, row.traits, spec.tags, row.tags, spec.capabilityTags, row.capabilityTags].flatMap((v) => Array.isArray(v) ? v : []);
-  if (traits.some((v) => typeof v === "string" && /uncensored|abliterated|heretic/i.test(v))) return true;
-  return /uncensored|abliterated|heretic/i.test([spec.name, spec.description, row.id].filter(Boolean).join(" "));
+async function getJson(path: string): Promise<AnyRecord> {
+  const response = await fetch(`${BASE}${path}`, {
+    method: "GET",
+    headers: { accept: "application/json" },
+    signal: AbortSignal.timeout(15_000),
+    cache: "no-store"
+  });
+  if (!response.ok) throw new Error(`Venice ${path} returned ${response.status}`);
+  return response.json() as Promise<AnyRecord>;
 }
 
-function priceValue(value: any): number | undefined {
-  const raw = value && typeof value === "object" ? (value.usd ?? value.USD ?? value.value) : value;
+function priceValue(value: unknown): number | undefined {
+  const raw = value && typeof value === "object"
+    ? ((value as AnyRecord).usd ?? (value as AnyRecord).USD ?? (value as AnyRecord).value)
+    : value;
   const number = Number(raw);
-  return Number.isFinite(number) && number > 0 ? number : undefined;
+  return Number.isFinite(number) && number >= 0 ? number : undefined;
 }
 
 function mapModel(row: AnyRecord): ModelInfo | null {
   if (!row || typeof row.id !== "string") return null;
-  const spec: AnyRecord = row.model_spec && typeof row.model_spec === "object" ? row.model_spec : row;
-  if (spec.offline === true) return null;
-  if (!isExplicitlyUncensored(row, spec)) return null;
-  const caps = spec.capabilities;
-  const capNames = Array.isArray(caps)
-    ? caps.filter((v: unknown) => typeof v === "string")
-    : caps && typeof caps === "object"
-      ? Object.entries(caps).filter(([, v]) => v === true).map(([k]) => k)
-      : [];
-  const context = Number(spec.availableContextTokens ?? spec.context_length ?? spec.contextLength ?? spec.context_window);
-  const pricing = spec.pricing || {};
-  const input = priceValue(pricing.input?.usd ?? pricing.input_usd ?? pricing.input);
-  const output = priceValue(pricing.output?.usd ?? pricing.output_usd ?? pricing.output);
-  const name = typeof spec.name === "string" ? spec.name : row.id;
+  const spec: AnyRecord = row.model_spec && typeof row.model_spec === "object" ? row.model_spec : {};
+  if (spec.offline === true || row.type && row.type !== "text") return null;
+
+  const capabilities: AnyRecord = spec.capabilities && typeof spec.capabilities === "object"
+    ? spec.capabilities
+    : {};
+  const traits = Array.isArray(spec.traits)
+    ? spec.traits.filter((value: unknown): value is string => typeof value === "string")
+    : [];
+  const contextTokens = Number(spec.availableContextTokens ?? row.context_length ?? spec.context_length ?? 0);
+  const maxCompletionTokens = Number(spec.maxCompletionTokens ?? 0);
+  const pricing: AnyRecord = spec.pricing || {};
+  const name = typeof spec.name === "string" && spec.name.trim() ? spec.name : row.id;
   const description = typeof spec.description === "string" ? spec.description : "";
+  const deprecation = spec.deprecation && typeof spec.deprecation === "object"
+    ? {
+        date: typeof spec.deprecation.date === "string" ? spec.deprecation.date : undefined,
+        removesAt: typeof spec.deprecation.removesAt === "string" ? spec.deprecation.removesAt : undefined,
+        replacementModelId: typeof spec.deprecation.replacementModelId === "string" ? spec.deprecation.replacementModelId : undefined,
+        autoRemap: spec.deprecation.autoRemap === true
+      }
+    : undefined;
+  const isFast = /flash|fast|turbo|mini|haiku/i.test(name + " " + row.id);
+  const hasOpenWeights = typeof spec.modelSource === "string" && spec.modelSource.length > 0;
+
   return {
     id: row.id,
     name,
-    provider: "Venice · modelo uncensored",
+    provider: "Venice AI",
     providerId: "venice",
-    description: [description, ...capNames.map((v: string) => v.replace(/([A-Z])/g, " $1")), spec.deprecation ? "Retiring" : ""].filter(Boolean).join(" · ").slice(0, 420) || "Modelo marcado Uncensored en el catálogo oficial de Venice",
-    category: /flash|fast|haiku|mini/i.test(name + row.id) ? "Fast" : "Frontier",
-    context: context > 0 ? (context >= 1000 ? Math.round(context / 1000) + "K" : String(context)) : "No publicado",
-    uncensored: true,
-    deprecated: Boolean(spec.deprecation),
-    inputPrice: input,
-    outputPrice: output,
-    maxCompletionTokens: Number(spec.maxCompletionTokens) > 0 ? Number(spec.maxCompletionTokens) : undefined,
+    description: description.slice(0, 420) || "Modelo de texto disponible en el catálogo oficial de Venice.",
+    category: isFast ? "Fast" : hasOpenWeights ? "Open" : "Frontier",
+    context: contextTokens > 0
+      ? contextTokens >= 1_000_000 ? (contextTokens / 1_000_000).toFixed(contextTokens % 1_000_000 === 0 ? 0 : 1) + "M"
+        : Math.round(contextTokens / 1000) + "K"
+      : "No publicado",
+    contextTokens,
+    uncensored: spec.uncensored === true,
+    traits,
+    deprecated: Boolean(deprecation),
+    deprecation,
+    inputPrice: priceValue(pricing.input),
+    outputPrice: priceValue(pricing.output),
+    maxCompletionTokens: maxCompletionTokens > 0 && Number.isFinite(maxCompletionTokens) ? maxCompletionTokens : undefined,
     privacy: typeof spec.privacy === "string" ? spec.privacy : undefined,
-    supportsVision: Boolean(caps?.supportsVision),
-    supportsReasoning: Boolean(caps?.supportsReasoning),
-    supportsFunctionCalling: Boolean(caps?.supportsFunctionCalling)
-  } as ModelInfo;
+    supportsVision: capabilities.supportsVision === true,
+    supportsReasoning: capabilities.supportsReasoning === true,
+    supportsFunctionCalling: capabilities.supportsFunctionCalling === true,
+    supportsWebSearch: capabilities.supportsWebSearch === true,
+    supportsE2EE: capabilities.supportsE2EE === true,
+    supportsVideoInput: capabilities.supportsVideoInput === true,
+    supportsAudioInput: capabilities.supportsAudioInput === true
+  };
 }
 
-async function loadCatalog(): Promise<CatalogResult> {
-  const response = await fetch(`${BASE}/models?type=text`, {
-    method: "GET",
-    headers: { accept: "application/json" },
-    signal: AbortSignal.timeout(15_000)
-  });
-  if (!response.ok) throw new Error(`Venice model catalog returned ${response.status}`);
-  const payload: AnyRecord = await response.json();
-  const rows = Array.isArray(payload) ? payload : Array.isArray(payload.data) ? payload.data : Array.isArray(payload.models) ? payload.models : [];
-  if (!rows.length) throw new Error("Venice returned an empty or unrecognized text-model catalog");
-
-  let mostUncensoredId: string | undefined;
-  try {
-    const traitsResponse = await fetch(`${BASE}/models/traits?type=text`, {
-      method: "GET",
-      headers: { accept: "application/json" },
-      signal: AbortSignal.timeout(10_000)
-    });
-    if (traitsResponse.ok) {
-      const traitsPayload: AnyRecord = await traitsResponse.json();
-      const traits = traitsPayload.data || traitsPayload;
-      if (typeof traits.most_uncensored === "string") mostUncensoredId = traits.most_uncensored;
-    }
-  } catch { /* The explicit Uncensored capability remains authoritative when traits are unavailable. */ }
-
-  const models = rows.map(mapModel).filter((m: ModelInfo | null): m is ModelInfo => Boolean(m));
-  if (mostUncensoredId && !models.some((m) => m.id === mostUncensoredId)) {
-    const row = rows.find((item: AnyRecord) => item.id === mostUncensoredId);
-    if (row) {
-      const spec = row.model_spec || row;
-      const promoted = mapModel({ ...row, model_spec: { ...spec, traits: [...(Array.isArray(spec.traits) ? spec.traits : []), "uncensored"] } });
-      if (promoted) models.unshift(promoted);
-    }
-  }
-  models.sort((a, b) => Number(a.deprecated) - Number(b.deprecated) || a.name.localeCompare(b.name));
-  return { models, mostUncensoredId };
+function asStringMap(value: unknown): Record<string, string> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value as AnyRecord).filter((entry): entry is [string, string] => typeof entry[1] === "string")
+  );
 }
 
-export async function getUncensoredTextCatalog(force = false): Promise<CatalogResult> {
+async function loadCatalog(): Promise<VeniceTextCatalog> {
+  // Venice publishes these discovery endpoints. No OpenRouter model registry or IDs are used.
+  const modelsPayload = await getJson("/models?type=text");
+  const rows = Array.isArray(modelsPayload.data)
+    ? modelsPayload.data
+    : Array.isArray(modelsPayload.models) ? modelsPayload.models : [];
+  if (!rows.length) throw new Error("Venice devolvió un catálogo de texto vacío o con un formato desconocido.");
+
+  const [traitsPayload, compatibilityPayload] = await Promise.all([
+    getJson("/models/traits?type=text").catch(() => ({} as AnyRecord)),
+    getJson("/models/compatibility_mapping?type=text").catch(() => ({} as AnyRecord))
+  ]);
+  const traits = asStringMap(traitsPayload.data ?? traitsPayload);
+  const compatibilityMapping = asStringMap(compatibilityPayload.data ?? compatibilityPayload);
+  const models = rows
+    .map((row: AnyRecord) => mapModel(row))
+    .filter((model: ModelInfo | null): model is ModelInfo => Boolean(model));
+
+  if (!models.length) throw new Error("Venice no devolvió modelos de texto disponibles.");
+  models.sort((a, b) =>
+    Number(a.deprecated) - Number(b.deprecated) ||
+    Number(b.uncensored) - Number(a.uncensored) ||
+    a.name.localeCompare(b.name)
+  );
+
+  return {
+    models,
+    traits,
+    compatibilityMapping,
+    mostUncensoredId: traits.most_uncensored
+  };
+}
+
+export async function getVeniceTextCatalog(force = false): Promise<VeniceTextCatalog> {
   if (!force && cached && cached.expires > Date.now()) return cached.value;
   if (!pending) {
     pending = loadCatalog().then((value) => {
@@ -109,4 +139,6 @@ export async function getUncensoredTextCatalog(force = false): Promise<CatalogRe
   return pending;
 }
 
-export function clearModelCatalogCache() { cached = null; }
+export function clearModelCatalogCache() {
+  cached = null;
+}
