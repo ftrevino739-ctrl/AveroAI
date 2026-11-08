@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
   if (total > 1_500_000) return error("El contexto enviado supera el límite de AveroAI (1.5 M caracteres).", 413);
   if (!messages.some(m => m.role === "user")) return error("Se requiere al menos un mensaje del usuario.", 400);
 
-  const requested = typeof data.max_tokens === "number" ? Math.floor(data.max_tokens) : 32768;
+  const requested = typeof data.max_tokens === "number" ? Math.floor(data.max_tokens) : 65536;
   const maxTokens = Math.max(1, Math.min(requested, 65536));
   const temperature = typeof data.temperature === "number" ? Math.max(0, Math.min(data.temperature, 2)) : 0.7;
   const authFetch = createAuthFetch(walletKey);
