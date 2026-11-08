@@ -6,7 +6,7 @@ Chat multimodelo Liquid Glass con catálogo Venice AI y autenticación x402 basa
 - Gateway server-side compatible con Venice Chat Completions y streaming.
 - Autenticación x402 con `venice-x402-client`; firma nueva por solicitud.
 - Catálogo dinámico desde `GET /api/v1/models?type=text`, con catálogo fallback para los modelos solicitados.
-- Modelos destacados: DeepSeek V4.1 Flash Uncensored, DeepSeek V4.1 Flash (1017) Uncensored, Kimi K2.5, Kimi K3, Claude Fable 5.1, Claude Opus 5, Claude Sonnet 5, Claude Opus 4.7, Claude Sonnet 4.6, GLM 5.3 Flash, Grok 4.3 y Grok 4.6.
+- Modelos destacados: DeepSeek V4.1 Flash Uncensored, DeepSeek V4.1 Flash (1017) y DeepSeek V4.1 Flash (1017) Uncensored, Kimi K2.5, Kimi K3, Claude Fable 5.1, Claude Opus 5, Claude Sonnet 5, Claude Opus 4.7, Claude Sonnet 4.6, GLM 5.3 Flash, Grok 4.3 y Grok 4.6.
 - Contexto de conversación ampliado y salida solicitada hasta 65,536 tokens (el modelo puede imponer un máximo menor).
 - Historial local, selector, streaming, cancelar, exportar y UI Liquid Glass.
 
