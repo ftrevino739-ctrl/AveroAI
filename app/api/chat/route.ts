@@ -1,86 +1,67 @@
 import { NextRequest } from "next/server";
-import { models, providerReady } from "@/lib/models";
+import { models, type ProviderId } from "@/lib/models";
 
 export const runtime = "nodejs";
-
-type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
-
-export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json();
-    const modelId = String(body.model || "");
-    const messages = body.messages as ChatMessage[];
-    const model = models.find((item) => item.id === modelId);
-    if (!model) return Response.json({ error: "Modelo no reconocido." }, { status: 400 });
-    if (!Array.isArray(messages) || messages.length === 0) return Response.json({ error: "No hay mensajes para enviar." }, { status: 400 });
-    if (!providerReady(model.providerId)) return Response.json({ error: `Falta configurar la API key del proveedor ${model.provider} en el servidor.` }, { status: 503 });
-
-    const lastUser = [...messages].reverse().find((m) => m.role === "user");
-    if (!lastUser) return Response.json({ error: "Se requiere un mensaje del usuario." }, { status: 400 });
-
-    let upstream: Response;
-    if (model.providerId === "anthropic") {
-      upstream = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "content-type": "application/json", "x-api-key": process.env.ANTHROPIC_API_KEY!, "anthropic-version": "2023-06-01" },
-        body: JSON.stringify({ model: model.id, max_tokens: 4096, stream: true, messages: messages.filter(m => m.role !== "system").map(m => ({ role: m.role, content: m.content })), system: messages.find(m => m.role === "system")?.content })
-      });
-    } else {
-      const configs: Record<string, { url: string; key: string; model: string }> = {
-        openai: { url: "https://api.openai.com/v1/chat/completions", key: process.env.OPENAI_API_KEY!, model: model.id },
-        google: { url: `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions`, key: process.env.GOOGLE_API_KEY!, model: model.id },
-        openrouter: { url: "https://openrouter.ai/api/v1/chat/completions", key: process.env.OPENROUTER_API_KEY!, model: model.id }
-      };
-      const config = configs[model.providerId] || { url: `${process.env.CUSTOM_BASE_URL}/chat/completions`, key: process.env.CUSTOM_API_KEY!, model: model.id };
-      upstream = await fetch(config.url, {
-        method: "POST",
-        headers: { "content-type": "application/json", authorization: `Bearer ${config.key}`, ...(model.providerId === "openrouter" ? { "HTTP-Referer": process.env.APP_URL || "http://localhost:3000", "X-Title": "AveroAI" } : {}) },
-        body: JSON.stringify({ model: config.model, messages, stream: true })
-      });
-    }
-
-    if (!upstream.ok) {
-      const detail = await upstream.text();
-      return Response.json({ error: `El proveedor respondió ${upstream.status}: ${detail.slice(0, 500)}` }, { status: upstream.status });
-    }
-    if (!upstream.body) return Response.json({ error: "El proveedor no devolvió un flujo de respuesta." }, { status: 502 });
-
-    const encoder = new TextEncoder();
-    const decoder = new TextDecoder();
-    const reader = upstream.body.getReader();
-    const stream = new ReadableStream({
-      async start(controller) {
-        let buffer = "";
-        try {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split("\n");
-            buffer = lines.pop() || "";
-            for (const line of lines) {
-              if (!line.startsWith("data:")) continue;
-              const payload = line.slice(5).trim();
-              if (!payload || payload === "[DONE]") continue;
-              try {
-                const parsed = JSON.parse(payload);
-                const text = model.providerId === "anthropic"
-                  ? (parsed.type === "content_block_delta" ? parsed.delta?.text || "" : "")
-                  : parsed.choices?.[0]?.delta?.content || "";
-                if (text) controller.enqueue(encoder.encode(text));
-              } catch { /* Ignore non-JSON SSE keepalives. */ }
-            }
-          }
-          controller.close();
-        } catch (error) {
-          controller.error(error);
-        } finally {
-          reader.releaseLock();
-        }
-      }
-    });
-    return new Response(stream, { headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no" } });
-  } catch {
-    return Response.json({ error: "No se pudo procesar la solicitud." }, { status: 500 });
+export const dynamic = "force-dynamic";
+type Message = { role:"system"|"user"|"assistant"; content:string };
+const hits = new Map<string,{count:number;reset:number}>();
+function ready(id:ProviderId) {
+  const env:Record<ProviderId,string|undefined>={openai:process.env.OPENAI_API_KEY,anthropic:process.env.ANTHROPIC_API_KEY,google:process.env.GOOGLE_API_KEY,openrouter:process.env.OPENROUTER_API_KEY,custom:process.env.CUSTOM_API_KEY};
+  return Boolean(env[id] && (id!=="custom" || process.env.CUSTOM_BASE_URL));
+}
+function limited(key:string) {
+  const now=Date.now(); const item=hits.get(key);
+  if(!item || item.reset<now){hits.set(key,{count:1,reset:now+60_000});return false;}
+  item.count++; return item.count>15;
+}
+function error(message:string,status:number){return Response.json({error:message},{status,headers:{"Cache-Control":"no-store"}});}
+export async function POST(request:NextRequest) {
+  const forwarded=request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+  if(limited(forwarded)) return error("Has enviado demasiadas solicitudes. Espera un minuto e inténtalo de nuevo.",429);
+  let body:unknown;
+  try { const length=Number(request.headers.get("content-length")||0); if(length>100_000)return error("La solicitud es demasiado grande.",413); body=await request.json(); }
+  catch{return error("El cuerpo de la solicitud no es JSON válido.",400);}
+  if(!body || typeof body!=="object")return error("Solicitud no válida.",400);
+  const data=body as {model?:unknown;messages?:unknown};
+  const modelId=typeof data.model==="string"?data.model:"";
+  const model=models.find(m=>m.id===modelId);
+  if(!model)return error("Modelo no reconocido.",400);
+  if(!Array.isArray(data.messages)||data.messages.length<1||data.messages.length>40)return error("La conversación debe contener entre 1 y 40 mensajes.",400);
+  const messages=data.messages as Message[];
+  let total=0;
+  for(const m of messages){
+    if(!m||!["system","user","assistant"].includes(m.role)||typeof m.content!=="string"||m.content.length>20_000)return error("Hay un mensaje con formato no válido o demasiado largo.",400);
+    total+=m.content.length;
   }
+  if(total>60_000)return error("La conversación supera el límite de contexto de AveroAI.",413);
+  if(!messages.some(m=>m.role==="user"))return error("Se requiere al menos un mensaje del usuario.",400);
+  if(!ready(model.providerId))return error(`Configura la API key de ${model.provider} en las variables de entorno del servidor.`,503);
+  const signal=AbortSignal.any([request.signal,AbortSignal.timeout(90_000)]);
+  try{
+    let upstream:Response;
+    if(model.providerId==="anthropic"){
+      const system=messages.filter(m=>m.role==="system").map(m=>m.content).join("\n\n");
+      upstream=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",signal,headers:{"content-type":"application/json","x-api-key":process.env.ANTHROPIC_API_KEY!,"anthropic-version":"2023-06-01"},body:JSON.stringify({model:model.id,max_tokens:4096,stream:true,messages:messages.filter(m=>m.role!=="system").map(m=>({role:m.role,content:m.content})),...(system?{system}:{})})});
+    }else{
+      const configs:Record<string,{url:string;key:string}>={openai:{url:"https://api.openai.com/v1/chat/completions",key:process.env.OPENAI_API_KEY!},google:{url:"https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",key:process.env.GOOGLE_API_KEY!},openrouter:{url:"https://openrouter.ai/api/v1/chat/completions",key:process.env.OPENROUTER_API_KEY!}};
+      const cfg=configs[model.providerId] || {url:`${process.env.CUSTOM_BASE_URL!.replace(/\/$/,"")}/chat/completions`,key:process.env.CUSTOM_API_KEY!};
+      let endpoint:URL; try{endpoint=new URL(cfg.url);}catch{return error("CUSTOM_BASE_URL no es una URL válida.",500);}
+      if(endpoint.protocol!=="https:" && endpoint.hostname!=="localhost" && endpoint.hostname!=="127.0.0.1")return error("El endpoint personalizado debe usar HTTPS.",500);
+      upstream=await fetch(cfg.url,{method:"POST",signal,headers:{"content-type":"application/json",authorization:`Bearer ${cfg.key}`,...(model.providerId==="openrouter"?{"HTTP-Referer":process.env.APP_URL||"http://localhost:3000","X-Title":"AveroAI"}:{})},body:JSON.stringify({model:model.id,messages,stream:true})});
+    }
+    if(!upstream.ok){const detail=(await upstream.text()).slice(0,700);return error(`Error de ${model.provider} (${upstream.status}): ${detail}`,upstream.status>=400&&upstream.status<600?upstream.status:502);}
+    if(!upstream.body)return error("El proveedor no devolvió un flujo de respuesta.",502);
+    const reader=upstream.body.getReader(),decoder=new TextDecoder(),encoder=new TextEncoder();
+    const stream=new ReadableStream<Uint8Array>({
+      async start(controller){
+        let buffer="";
+        const consume=(line:string)=>{if(!line.startsWith("data:"))return;const raw=line.slice(5).trim();if(!raw||raw==="[DONE]")return;try{const parsed=JSON.parse(raw);const chunk=model.providerId==="anthropic"?(parsed.type==="content_block_delta"?parsed.delta?.text||"":""):parsed.choices?.[0]?.delta?.content; if(typeof chunk==="string"&&chunk)controller.enqueue(encoder.encode(chunk));}catch{/* Ignore SSE comments and malformed keepalives. */}};
+        try{while(true){const {done,value}=await reader.read();if(done)break;buffer+=decoder.decode(value,{stream:true});const lines=buffer.split("\n");buffer=lines.pop()||"";for(const line of lines)consume(line.replace(/\r$/,""));}buffer+=decoder.decode();if(buffer.trim())consume(buffer);controller.close();}
+        catch{controller.error(new Error("La conexión con el proveedor se interrumpió."));}
+        finally{reader.releaseLock();}
+      },
+      cancel(){reader.cancel().catch(()=>{});}
+    });
+    return new Response(stream,{headers:{"Content-Type":"text/plain; charset=utf-8","Cache-Control":"no-cache, no-transform","X-Accel-Buffering":"no"}});
+  }catch(e){if(e instanceof Error&&e.name==="TimeoutError")return error("El proveedor tardó demasiado en responder. Inténtalo de nuevo.",504);return error("No se pudo completar la solicitud. Comprueba la conexión y la configuración del proveedor.",502);}
 }
