@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  poweredByHeader: false,\n  output: "standalone",
+  poweredByHeader: false,
+  output: "standalone",
   async headers() {
     return [{
       source: "/:path*",
