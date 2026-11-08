@@ -25,7 +25,7 @@ export default function Home(){
   const text=value.trim();if((!text&&!attachment)||sending)return;
   const prompt=attachment?text+"\n\n[Archivo adjunto: "+attachment+"]":text;
   const id=activeId||crypto.randomUUID(),old=chats.find(c=>c.id===id),prior=old?.messages||[];
-  const title=old?.title==="Nueva conversación"||!old?prompt.slice(0,46):old.title;
+  const title=old?.title==="Nueva conversación"||old?.title==="New conversation"||!old?prompt.slice(0,46):old.title;
   const next=[...prior,{role:"user" as const,content:prompt},{role:"assistant" as const,content:"",modelName:selectedModel.name}];
   setChats(p=>old?p.map(c=>c.id===id?{...c,title,messages:next,updatedAt:Date.now()}:c):[{id,title,messages:next,updatedAt:Date.now()},...p]);
   setActiveId(id);setInput("");setAttachment("");setSending(true);setError("");
