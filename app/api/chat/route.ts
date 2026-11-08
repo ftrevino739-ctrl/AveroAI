@@ -35,19 +35,20 @@ export async function POST(request:NextRequest) {
   }
   if(total>60_000)return error("La conversación supera el límite de contexto de AveroAI.",413);
   if(!messages.some(m=>m.role==="user"))return error("Se requiere al menos un mensaje del usuario.",400);
+  const cleanMessages=messages.map(({role,content})=>({role,content}));
   if(!ready(model.providerId))return error(`Configura la API key de ${model.provider} en las variables de entorno del servidor.`,503);
   const signal=AbortSignal.any([request.signal,AbortSignal.timeout(90_000)]);
   try{
     let upstream:Response;
     if(model.providerId==="anthropic"){
       const system=messages.filter(m=>m.role==="system").map(m=>m.content).join("\n\n");
-      upstream=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",signal,headers:{"content-type":"application/json","x-api-key":process.env.ANTHROPIC_API_KEY!,"anthropic-version":"2023-06-01"},body:JSON.stringify({model:model.id,max_tokens:4096,stream:true,messages:messages.filter(m=>m.role!=="system").map(m=>({role:m.role,content:m.content})),...(system?{system}:{})})});
+      upstream=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",signal,headers:{"content-type":"application/json","x-api-key":process.env.ANTHROPIC_API_KEY!,"anthropic-version":"2023-06-01"},body:JSON.stringify({model:model.id,max_tokens:4096,stream:true,messages:cleanMessages.filter(m=>m.role!=="system").map(m=>({role:m.role,content:m.content})),...(system?{system}:{})})});
     }else{
       const configs:Record<string,{url:string;key:string}>={openai:{url:"https://api.openai.com/v1/chat/completions",key:process.env.OPENAI_API_KEY!},google:{url:"https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",key:process.env.GOOGLE_API_KEY!},openrouter:{url:"https://openrouter.ai/api/v1/chat/completions",key:process.env.OPENROUTER_API_KEY!}};
       const cfg=configs[model.providerId] || {url:`${process.env.CUSTOM_BASE_URL!.replace(/\/$/,"")}/chat/completions`,key:process.env.CUSTOM_API_KEY!};
       let endpoint:URL; try{endpoint=new URL(cfg.url);}catch{return error("CUSTOM_BASE_URL no es una URL válida.",500);}
       if(endpoint.protocol!=="https:" && endpoint.hostname!=="localhost" && endpoint.hostname!=="127.0.0.1")return error("El endpoint personalizado debe usar HTTPS.",500);
-      upstream=await fetch(cfg.url,{method:"POST",signal,headers:{"content-type":"application/json",authorization:`Bearer ${cfg.key}`,...(model.providerId==="openrouter"?{"HTTP-Referer":process.env.APP_URL||"http://localhost:3000","X-Title":"AveroAI"}:{})},body:JSON.stringify({model:model.id,messages,stream:true})});
+      upstream=await fetch(cfg.url,{method:"POST",signal,headers:{"content-type":"application/json",authorization:`Bearer ${cfg.key}`,...(model.providerId==="openrouter"?{"HTTP-Referer":process.env.APP_URL||"http://localhost:3000","X-Title":"AveroAI"}:{})},body:JSON.stringify({model:model.id,messages:cleanMessages,stream:true})});
     }
     if(!upstream.ok){const detail=(await upstream.text()).slice(0,700);return error(`Error de ${model.provider} (${upstream.status}): ${detail}`,upstream.status>=400&&upstream.status<600?upstream.status:502);}
     if(!upstream.body)return error("El proveedor no devolvió un flujo de respuesta.",502);
