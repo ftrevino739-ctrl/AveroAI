@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { createAuthFetch } from "venice-x402-client";
-import { getUncensoredTextCatalog } from "@/lib/venice";
+import { getVeniceTextCatalog } from "@/lib/venice";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -50,16 +50,18 @@ export async function POST(request: NextRequest) {
 
   let selectedModel;
   try {
-    const catalog = await getUncensoredTextCatalog();
+    const catalog = await getVeniceTextCatalog();
     selectedModel = catalog.models.find((model) => model.id === modelId);
   } catch {
     return error("No se pudo verificar el modelo contra el catálogo oficial de Venice. No se enviará la solicitud.", 503);
   }
-  if (!selectedModel) return error("AveroAI solo permite modelos que Venice marca explícitamente como Uncensored y disponibles en su catálogo actual.", 403);
+  if (!selectedModel) return error("El modelo no pertenece al catálogo actual de modelos de texto de Venice. No se enviará la solicitud.", 403);
 
-  const requested = typeof data.max_tokens === "number" ? Math.floor(data.max_tokens) : 65536;
   const providerLimit = selectedModel.maxCompletionTokens || 65536;
-  const maxTokens = Math.max(1, Math.min(requested, 65536, providerLimit));
+  const requested = typeof data.max_tokens === "number" && Number.isFinite(data.max_tokens)
+    ? Math.floor(data.max_tokens)
+    : providerLimit;
+  const maxTokens = Math.max(1, Math.min(requested, providerLimit));
   const temperature = typeof data.temperature === "number" ? Math.max(0, Math.min(data.temperature, 2)) : 0.7;
   const authFetch = createAuthFetch(walletKey);
   const signal = AbortSignal.any([request.signal, AbortSignal.timeout(240_000)]);
