@@ -10,7 +10,7 @@ function ready(id:ProviderId) {
   return Boolean(env[id] && (id!=="custom" || process.env.CUSTOM_BASE_URL));
 }
 function limited(key:string) {
-  const now=Date.now(); const item=hits.get(key);
+  const now=Date.now(); if(hits.size>2000){for(const [ip,entry] of hits){if(entry.reset<now)hits.delete(ip);}} const item=hits.get(key);
   if(!item || item.reset<now){hits.set(key,{count:1,reset:now+60_000});return false;}
   item.count++; return item.count>15;
 }
@@ -19,7 +19,7 @@ export async function POST(request:NextRequest) {
   const forwarded=request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
   if(limited(forwarded)) return error("Has enviado demasiadas solicitudes. Espera un minuto e inténtalo de nuevo.",429);
   let body:unknown;
-  try { const length=Number(request.headers.get("content-length")||0); if(length>100_000)return error("La solicitud es demasiado grande.",413); body=await request.json(); }
+  try { const raw=await request.text(); if(new TextEncoder().encode(raw).byteLength>100_000)return error("La solicitud es demasiado grande.",413); body=JSON.parse(raw); }
   catch{return error("El cuerpo de la solicitud no es JSON válido.",400);}
   if(!body || typeof body!=="object")return error("Solicitud no válida.",400);
   const data=body as {model?:unknown;messages?:unknown};
