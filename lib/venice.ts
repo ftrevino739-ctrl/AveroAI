@@ -9,10 +9,11 @@ let cached: { expires: number; value: CatalogResult } | null = null;
 let pending: Promise<CatalogResult> | null = null;
 
 function isExplicitlyUncensored(row: AnyRecord, spec: AnyRecord): boolean {
-  const caps = spec.capabilities;
+  const caps = spec.capabilities || row.capabilities;
+  if (spec.uncensored === true || spec.isUncensored === true || row.uncensored === true || row.isUncensored === true) return true;
   if (Array.isArray(caps) && caps.some((v) => typeof v === "string" && /uncensored/i.test(v))) return true;
-  if (caps && typeof caps === "object" && Object.entries(caps).some(([key, value]) => /uncensored/i.test(key) && (value === true || value === "true"))) return true;
-  const traits = [spec.traits, row.traits, spec.tags, row.tags].flatMap((v) => Array.isArray(v) ? v : []);
+  if (caps && typeof caps === "object" && Object.entries(caps).some(([key, value]) => /uncensored/i.test(key) && (value === true || value === "true" || value === 1 || value === "Uncensored"))) return true;
+  const traits = [spec.traits, row.traits, spec.tags, row.tags, spec.capabilityTags, row.capabilityTags].flatMap((v) => Array.isArray(v) ? v : []);
   if (traits.some((v) => typeof v === "string" && /uncensored|abliterated|heretic/i.test(v))) return true;
   return /uncensored|abliterated|heretic/i.test([spec.name, spec.description, row.id].filter(Boolean).join(" "));
 }
