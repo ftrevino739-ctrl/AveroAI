@@ -1,0 +1,94 @@
+{
+  "models": {
+    "object": "list",
+    "type": "text",
+    "data": [
+      {
+        "id": "venice-default-sample",
+        "object": "model",
+        "type": "text",
+        "context_length": 64000,
+        "model_spec": {
+          "name": "Venice Default Sample",
+          "description": "Synthetic fixture matching the public catalog shape.",
+          "availableContextTokens": 64000,
+          "maxCompletionTokens": 8192,
+          "privacy": "private",
+          "offline": false,
+          "traits": [
+            "default"
+          ],
+          "capabilities": {
+            "supportsReasoning": true,
+            "supportsVision": false
+          },
+          "pricing": {
+            "input": {
+              "usd": 0.5
+            },
+            "output": {
+              "usd": 1.5
+            }
+          }
+        }
+      },
+      {
+        "id": "venice-uncensored-sample",
+        "object": "model",
+        "type": "text",
+        "model_spec": {
+          "name": "Venice Uncensored Sample",
+          "uncensored": true,
+          "offline": false,
+          "traits": [
+            "most_uncensored"
+          ],
+          "capabilities": {
+            "supportsVision": true
+          },
+          "pricing": {
+            "input": {
+              "usd": 0.2
+            },
+            "output": {
+              "usd": 0.8
+            }
+          }
+        }
+      },
+      {
+        "id": "venice-offline-sample",
+        "object": "model",
+        "type": "text",
+        "model_spec": {
+          "name": "Offline Sample",
+          "offline": true
+        }
+      },
+      {
+        "id": "venice-image-sample",
+        "object": "model",
+        "type": "image",
+        "model_spec": {
+          "name": "Image Sample"
+        }
+      }
+    ]
+  },
+  "traits": {
+    "object": "list",
+    "type": "text",
+    "data": {
+      "default": "venice-default-sample",
+      "most_uncensored": "venice-uncensored-sample"
+    }
+  },
+  "compatibility": {
+    "object": "list",
+    "type": "text",
+    "data": {
+      "gpt-4o": "venice-default-sample"
+    }
+  },
+  "note": "Synthetic fixture; not a live Venice catalog snapshot."
+}
