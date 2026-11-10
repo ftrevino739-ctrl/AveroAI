@@ -5,7 +5,7 @@ import type { ModelInfo } from "@/lib/models";
 
 type Message={role:"user"|"assistant";content:string;modelName?:string};
 type Chat={id:string;title:string;messages:Message[];updatedAt:number};
-type LibraryModel={id:string;name:string;family:string;source:string;sourceUrl:string;license:string;parameters:string;quantization:string;downloadGB:number|null;uncensored:boolean;exactVeniceCheckpoint:boolean;hardware:string;compatibleWith8GB:boolean;installCommand:string|null;note:string};
+type LibraryModel={id:string;name:string;family:string;source:string;sourceUrl:string;license:string;parameters:string;quantization:string;downloadGB:number|null;uncensored:boolean;listedByVenice:boolean;hardware:string;compatibleWith8GB:boolean;installCommand:string|null;note:string};
 const starters=[{icon:"✳",title:"Piensa una idea",sub:"Explora un concepto desde distintos ángulos."},{icon:"↗",title:"Organiza un plan",sub:"Convierte un objetivo en pasos claros."},{icon:"⌘",title:"Construye algo",sub:"Programa, crea y resuelve problemas."}];
 
 export default function Home(){
