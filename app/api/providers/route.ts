@@ -1,10 +1,61 @@
-import { models, type ProviderId } from "@/lib/models";
-export const runtime="nodejs";
-export const dynamic="force-dynamic";
-const names:Record<ProviderId,string>={openai:"OpenAI",anthropic:"Anthropic",google:"Google Gemini",openrouter:"OpenRouter",custom:"Endpoint personalizado"};
-export async function GET(){
- const keys:Record<ProviderId,boolean>={openai:Boolean(process.env.OPENAI_API_KEY),anthropic:Boolean(process.env.ANTHROPIC_API_KEY),google:Boolean(process.env.GOOGLE_API_KEY),openrouter:Boolean(process.env.OPENROUTER_API_KEY),custom:Boolean(process.env.CUSTOM_API_KEY&&process.env.CUSTOM_BASE_URL&&process.env.CUSTOM_MODEL_ID)};
- const catalogue=[...models,...(keys.custom&&process.env.CUSTOM_MODEL_ID?[{id:process.env.CUSTOM_MODEL_ID,name:process.env.CUSTOM_MODEL_NAME||"Custom model",provider:names.custom,providerId:"custom" as const,description:"OpenAI-compatible custom model",category:"Open" as const,context:"Provider defined"}]:[])];
- const providers=(Object.keys(names) as ProviderId[]).map(id=>({id,name:names[id],configured:keys[id],models:catalogue.filter(m=>m.providerId===id).length}));
- return Response.json({providers,models:catalogue.map(({id,name,provider,providerId,description,category,context})=>({id,name,provider,providerId,description,category,context,configured:keys[providerId]}))},{headers:{"Cache-Control":"no-store"}});
+import type { ModelInfo } from "@/lib/models";
+import { getLocalModelByOllamaTag } from "@/lib/local-model-library.js";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+const OLLAMA_BASE = (process.env.AVERO_OLLAMA_URL || "http://127.0.0.1:11434").replace(/\/$/, "");
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+export async function GET() {
+  try {
+    const response = await fetch(OLLAMA_BASE + "/api/tags", {
+      headers: { accept: "application/json" },
+      signal: AbortSignal.timeout(5000),
+      cache: "no-store"
+    });
+    if (!response.ok) throw new Error("Ollama respondió " + response.status);
+    const payload: unknown = await response.json();
+    const rows = isRecord(payload) && Array.isArray(payload.models) ? payload.models : [];
+    const models: ModelInfo[] = rows.flatMap((row: unknown) => {
+      if (!isRecord(row)) return [];
+      const id = typeof row.name === "string" ? row.name : typeof row.model === "string" ? row.model : "";
+      if (!id || id.length > 240) return [];
+      const match = getLocalModelByOllamaTag(id);
+      return [{
+        id,
+        name: match?.name || id,
+        provider: "Ollama · ejecución local",
+        providerId: "local" as const,
+        description: match?.note || "Modelo instalado en el motor local Ollama.",
+        category: "Open" as const,
+        context: "Local",
+        contextTokens: 0,
+        uncensored: match?.uncensored ?? /uncensored|abliterated|heretic/i.test(id),
+        traits: match?.uncensored ? ["uncensored", "local"] : ["local"],
+        privacy: "Se ejecuta en este equipo",
+        supportsVision: false,
+        supportsReasoning: false,
+        supportsFunctionCalling: false
+      }];
+    });
+    models.sort((a, b) => a.name.localeCompare(b.name));
+    return Response.json({
+      providers: [{ id: "local", name: "Ollama local", configured: true, models: models.length }],
+      models,
+      defaultModelId: models[0]?.id || "",
+      connection: { provider: "Ollama local", configured: true, catalogue: "installed-models", externalInference: false }
+    }, { headers: { "Cache-Control": "no-store" } });
+  } catch {
+    return Response.json({
+      providers: [{ id: "local", name: "Ollama local", configured: false, models: 0 }],
+      models: [],
+      defaultModelId: "",
+      connection: { provider: "Ollama local", configured: false, catalogue: "unavailable", externalInference: false },
+      error: "No se puede conectar con Ollama en " + OLLAMA_BASE + ". Instálalo e inicia un modelo local; AveroAI no enviará mensajes a Venice ni a otro proveedor externo."
+    }, { headers: { "Cache-Control": "no-store" } });
+  }
 }
