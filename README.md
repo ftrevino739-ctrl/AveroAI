@@ -75,3 +75,15 @@ El endpoint personalizado se configura exclusivamente en el servidor. Usa HTTPS 
 ## Licencia
 
 Todos los derechos reservados. No se concede una licencia de redistribución.
+
+
+## Aveiro community-compute roadmap
+
+The current application is a working multi-provider chat prototype, not yet the public keyless community-inference service. Its current chat adapters still require server-side provider credentials. Do not deploy it publicly as a free, unlimited service.
+
+See:
+- [Community Compute Architecture](docs/architecture/AVEIRO-COMMUNITY-COMPUTE.md)
+- [Model Licensing and Hosting Decision Record](docs/models/MODEL-LICENSING-AND-HOSTING.md)
+- Read-only model policy endpoint: `GET /api/model-access`
+
+The model policy endpoint describes candidate access routes only; it does not activate models or expose credentials. GPT and Claude require authorized commercial provider access. Kimi K2.5 and Kimi K3 are open-weight candidates subject to their own licences, infrastructure requirements and launch gates.
