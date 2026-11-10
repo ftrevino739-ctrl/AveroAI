@@ -349,9 +349,10 @@ export function createProviderNodeServer(inputConfig) {
         })
       });
 
-      if (!upstream.ok || !upstream.body) {
+      const upstreamContentType = String(upstream.headers.get("content-type") || "").toLowerCase();
+      if (!upstream.ok || !upstream.body || !upstreamContentType.startsWith("text/event-stream")) {
         await upstream.body?.cancel().catch(() => {});
-        return json(res, 502, { error: "The local inference runtime rejected the job." });
+        return json(res, 502, { error: "The local inference runtime did not return a valid streaming response." });
       }
 
       res.writeHead(200, {
