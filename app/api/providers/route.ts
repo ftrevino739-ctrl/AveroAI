@@ -1,24 +1,62 @@
-import { NextRequest } from "next/server";
-import { getVeniceTextCatalog } from "@/lib/venice";
-export const runtime="nodejs";
-export const dynamic="force-dynamic";
-const WALLET_KEY_PATTERN=/^0x[0-9a-f]{64}$/i;
-export async function GET(request:NextRequest){
-  const configured=WALLET_KEY_PATTERN.test(process.env.VENICE_WALLET_PRIVATE_KEY||"");
-  const forceRefresh=new URL(request.url).searchParams.get("refresh")==="1";
-  try{
-    const catalog=await getVeniceTextCatalog(forceRefresh);
+import type { ModelInfo } from "@/lib/models";
+import { getLocalModelByOllamaTag } from "@/lib/local-model-library.js";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+const OLLAMA_BASE = (process.env.AVERO_OLLAMA_URL || "http://127.0.0.1:11434").replace(/\/$/, "");
+
+function isRecord(value: unknown): value is Record<string, any> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+export async function GET() {
+  try {
+    const response = await fetch(OLLAMA_BASE + "/api/tags", {
+      headers: { accept: "application/json" },
+      signal: AbortSignal.timeout(5000),
+      cache: "no-store"
+    });
+    if (!response.ok) throw new Error("Ollama respondió " + response.status);
+    const payload: unknown = await response.json();
+    const rows = isRecord(payload) && Array.isArray(payload.models) ? payload.models : [];
+    const models: ModelInfo[] = rows.flatMap((row: unknown) => {
+      if (!isRecord(row)) return [];
+      const id = typeof row.name === "string" ? row.name : typeof row.model === "string" ? row.model : "";
+      if (!id || id.length > 240) return [];
+      const match = getLocalModelByOllamaTag(id);
+      const details = isRecord(row.details) ? row.details : {};
+      return [{
+        id,
+        name: match?.name || id,
+        provider: "Ollama · ejecución local",
+        providerId: "local",
+        description: match?.note || "Modelo instalado en el motor local Ollama.",
+        category: "Open",
+        context: "Local",
+        contextTokens: 0,
+        uncensored: match?.uncensored ?? /uncensored|abliterated|heretic/i.test(id),
+        traits: match?.uncensored ? ["uncensored", "local"] : ["local"],
+        privacy: "Se ejecuta en este equipo",
+        supportsVision: false,
+        supportsReasoning: false,
+        supportsFunctionCalling: false
+      }];
+    });
+    models.sort((a, b) => a.name.localeCompare(b.name));
     return Response.json({
-      providers:[{id:"venice",name:"Venice AI",configured,models:catalog.models.length}],
-      models:catalog.models,defaultModelId:catalog.defaultModelId,traits:catalog.traits,compatibilityMapping:catalog.compatibilityMapping,
-      connection:{provider:"Venice x402",configured,balance:"not-checked",catalogue:"live",filter:"all-available-text-models"},
-      policy:"Todos los modelos de texto activos del catálogo oficial. Uncensored solo cuando Venice lo confirma."
-    },{headers:{"Cache-Control":"no-store"}});
-  }catch(error){
+      providers: [{ id: "local", name: "Ollama local", configured: true, models: models.length }],
+      models,
+      defaultModelId: models[0]?.id || "",
+      connection: { provider: "Ollama local", configured: true, catalogue: "installed-models", externalInference: false }
+    }, { headers: { "Cache-Control": "no-store" } });
+  } catch {
     return Response.json({
-      providers:[{id:"venice",name:"Venice AI",configured,models:0}],models:[],defaultModelId:"",
-      connection:{provider:"Venice x402",configured,balance:"not-checked",catalogue:"error"},
-      error:error instanceof Error?error.message:"No se pudo consultar el catálogo oficial de Venice."
-    },{status:502,headers:{"Cache-Control":"no-store"}});
+      providers: [{ id: "local", name: "Ollama local", configured: false, models: 0 }],
+      models: [],
+      defaultModelId: "",
+      connection: { provider: "Ollama local", configured: false, catalogue: "unavailable", externalInference: false },
+      error: "No se puede conectar con Ollama en " + OLLAMA_BASE + ". Instálalo e inicia un modelo local; AveroAI no enviará mensajes a Venice ni a otro proveedor externo."
+    }, { headers: { "Cache-Control": "no-store" } });
   }
 }
