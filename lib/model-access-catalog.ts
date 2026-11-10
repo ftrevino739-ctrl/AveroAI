@@ -71,6 +71,50 @@ export const modelAccessCatalog: readonly ModelAccessRecord[] = [
     ]
   },
   {
+    id: "openai-gpt-oss-20b",
+    name: "gpt-oss-20b",
+    organization: "OpenAI",
+    accessKind: "open-weights",
+    launchStatus: "candidate-review-required",
+    selfHostWeights: true,
+    communityNodeCandidate: true,
+    licenseName: "Apache 2.0 plus gpt-oss usage policy",
+    commercialUseNotes: [
+      "OpenAI publishes the weights under Apache 2.0, allowing broad commercial use subject to the gpt-oss usage policy.",
+      "This is not a ChatGPT model endpoint and is not served by the OpenAI API or the ChatGPT product."
+    ],
+    deploymentNotes: [
+      "OpenAI describes gpt-oss-20b as a 21B-parameter text-only reasoning model that can run within about 16 GB of memory with MXFP4.",
+      "This is a much more practical first community-node candidate than Kimi K2.5 or Kimi K3, but actual latency and memory use must be benchmarked."
+    ],
+    officialSources: [
+      "https://help.openai.com/en/articles/11870455-openai-open-weight-models-gpt-oss",
+      "https://github.com/openai/gpt-oss"
+    ]
+  },
+  {
+    id: "openai-gpt-oss-120b",
+    name: "gpt-oss-120b",
+    organization: "OpenAI",
+    accessKind: "open-weights",
+    launchStatus: "candidate-review-required",
+    selfHostWeights: true,
+    communityNodeCandidate: true,
+    licenseName: "Apache 2.0 plus gpt-oss usage policy",
+    commercialUseNotes: [
+      "OpenAI publishes the weights under Apache 2.0, allowing broad commercial use subject to the gpt-oss usage policy.",
+      "This is not GPT available inside ChatGPT and is not served by the OpenAI API."
+    ],
+    deploymentNotes: [
+      "OpenAI describes gpt-oss-120b as a 117B-parameter text-only reasoning model designed to fit on a single 80 GB accelerator such as an NVIDIA H100 or AMD MI300X.",
+      "It is a production-scale GPU requirement, but still substantially more approachable than a trillion-parameter model spread across multiple machines."
+    ],
+    officialSources: [
+      "https://help.openai.com/en/articles/11870455-openai-open-weight-models-gpt-oss",
+      "https://github.com/openai/gpt-oss"
+    ]
+  },
+  {
     id: "moonshot-kimi-k2-5",
     name: "Kimi K2.5",
     organization: "Moonshot AI",
