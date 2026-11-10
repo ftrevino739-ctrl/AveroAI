@@ -1,78 +1,96 @@
 # AveroAI
 
-**Una idea. Muchas posibilidades.**
+AveroAI es una aplicación privada de Next.js que ofrece una interfaz propia para conversar con los modelos de texto disponibles en Venice AI. **AveroAI es la interfaz y el enrutador; Venice proporciona el catálogo, la infraestructura de inferencia y el acceso a los modelos.** No entrenamos ni alojamos los pesos de esos modelos y no nos presentamos como el sitio oficial de Venice.
 
-AveroAI es un espacio de chat multimodelo con una interfaz Liquid Glass, historial local, selector de modelos y un gateway de inferencia en servidor.
+## Qué modelos usa
 
-## Funciones incluidas
+El backend consulta el catálogo vivo de Venice mediante `GET /models?type=text`, además de sus endpoints de traits y compatibilidad. El selector usa los IDs reales que devuelve Venice y los envía sin sustituirlos a `POST /chat/completions`. Por tanto, las respuestas las genera el modelo seleccionado a través de la infraestructura de Venice; no es una simulación de Venice ni una capa que solo oculte el nombre AveroAI.
 
-- Interfaz adaptable a escritorio, tablet y móvil, con tema claro y oscuro.
-- Conversaciones múltiples con guardado local en el navegador.
-- Selector de modelos con búsqueda y catálogo inicial.
-- Respuestas en streaming y opción para detener la generación.
-- Copiar respuestas y exportar conversaciones a JSON.
-- Adjuntar archivos de texto, Markdown, CSV, JSON y LOG (hasta 150 KB).
-- Adaptadores para OpenAI, Anthropic, Gemini mediante endpoint compatible con OpenAI, OpenRouter y endpoint personalizado compatible.
-- Las API keys permanecen en el servidor; no se exponen al navegador.
-- Validación de entradas, límites de tamaño, timeout y limitación básica de solicitudes.
-- GitHub Actions para comprobar tipos, lint y compilación de producción.
+El catálogo de Venice puede incluir modelos de distintos desarrolladores y familias. Que un modelo aparezca en Venice significa que Venice lo ofrece mediante su API; no significa que AveroAI posea o entrene ese modelo. El inventario cambia, por eso no fijamos la lista de IDs en el código.
 
-## Requisitos e instalación
+Esta versión integra **chat de texto**. Aunque el catálogo publique capacidades de visión, audio, vídeo o herramientas, esas capacidades no están activadas en la interfaz actual. Se deben añadir flujos y endpoints específicos antes de anunciarlas como funciones de AveroAI.
 
-Requiere Node.js 20.9 o superior y una API key válida de al menos un proveedor.
+## Funciones
 
-1. Clona el repositorio.
-2. Ejecuta `npm install`.
-3. Copia `.env.example` como `.env.local`.
-4. Añade al menos una API key válida.
-5. Ejecuta `npm run dev`.
-6. Abre `http://localhost:3000`.
+- Catálogo dinámico de modelos de texto, traits, compatibilidades, capacidades y precios publicados.
+- Modelo inicial basado en `traits.default`, con fallback al primer modelo activo disponible.
+- Resolución de aliases solo cuando su destino existe en el catálogo actual.
+- Chat en streaming desde el backend; la clave privada de la wallet nunca llega al navegador.
+- Límite de salida configurable de 1.024, 2.048, 4.096 u 8.192 tokens, con un máximo absoluto de 8.192 en el servidor.
+- Historial local, exportación JSON, tema claro/oscuro y adjuntos de texto de hasta 150 KB.
+- Puerta privada por código compartido y cookie HttpOnly firmada de siete días.
+- Consulta de saldo Venice x402/DIEM de solo lectura desde Ajustes.
 
-## Variables de entorno
+## Autenticación y pagos
 
-| Variable | Proveedor / uso |
-| --- | --- |
-| `OPENAI_API_KEY` | OpenAI |
-| `ANTHROPIC_API_KEY` | Anthropic |
-| `GOOGLE_API_KEY` | Gemini |
-| `OPENROUTER_API_KEY` | OpenRouter |
-| `CUSTOM_BASE_URL` | URL base del endpoint compatible personalizado |
-| `CUSTOM_API_KEY` | Clave del endpoint personalizado |
-| `CUSTOM_MODEL_ID` | Identificador de modelo del endpoint personalizado |
-| `CUSTOM_MODEL_NAME` | Nombre visible del modelo personalizado |
-| `APP_URL` | URL pública de AveroAI; se envía como metadato a OpenRouter |
+Se utiliza `venice-x402-client@0.2.0` con una wallet EVM en Base (chain ID 8453). `createAuthFetch()` firma una autenticación SIWX nueva para cada petición. El endpoint de saldo usa `VeniceClient.getBalance()`; muestra por separado el crédito x402 en USD y el saldo DIEM vinculado.
 
-No guardes claves reales en Git ni en variables del cliente como `NEXT_PUBLIC_*`. En producción, configúralas en el panel privado de variables de entorno del hosting.
+**No hay recarga automática ni pagos iniciados por AveroAI.** La aplicación no llama a `topUp()` y no firma transferencias de USDC. Una respuesta HTTP 402 se muestra como un requisito de pago/autenticación de Venice; el significado concreto depende del cuerpo y los encabezados de la respuesta. No se debe asumir que todo 402 significa únicamente saldo cero.
 
-## Comandos
+No uses tu wallet principal. Configura una wallet dedicada con fondos limitados. Nunca pegues la clave privada en chats, en el navegador o en GitHub.
 
-- `npm run dev` — servidor de desarrollo.
-- `npm run typecheck` — comprobación TypeScript.
-- `npm run lint` — ESLint.
-- `npm run build` — compilación de producción.
-- `npm start` — servidor de producción después de compilar.
+## Configuración local (Windows PowerShell)
 
-## Docker
+Requisitos: Node.js 22 recomendado y Git.
 
-La imagen de producción se construye con `docker build -t averoai .` y se ejecuta con `docker run --env-file .env.local -p 3000:3000 averoai`. El contenedor escucha en el puerto 3000 y usa salida standalone de Next.js.
+```powershell
+git clone https://github.com/ftrevino739-ctrl/AveroAI.git
+cd AveroAI
+git checkout feature/venice-x402-keyless
+npm install
+Copy-Item .env.example .env.local
+notepad .env.local
+```
 
-## Modelos y acceso
+Configura estos valores en `.env.local`:
 
-El catálogo es una selección inicial y no garantiza que un modelo siga habilitado, que esté incluido en tu plan o que tu clave tenga permiso para usarlo. Verifica los identificadores y el acceso en el panel/documentación de cada proveedor. Los precios y límites los determina el proveedor. AveroAI enruta solicitudes autorizadas; no evita suscripciones, facturación ni controles de acceso.
+```env
+VENICE_WALLET_PRIVATE_KEY=0x...clave_hex_de_32_bytes
+AVERO_ACCESS_CODE=un_codigo_privado_largo_de_16_caracteres_o_mas
+AVERO_SESSION_SECRET=secreto_aleatorio_de_32_bytes_o_mas
+```
 
-## Arquitectura
+Genera el secreto de sesión con PowerShell:
 
-- `app/page.tsx`: interfaz y estado de conversaciones.
-- `app/api/chat/route.ts`: gateway server-side y streaming.
-- `lib/models.ts`: catálogo de modelos.
-- `app/globals.css`: sistema visual Liquid Glass.
+```powershell
+[Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(48))
+```
 
-## Seguridad y privacidad
+El código de acceso debe tener al menos 16 caracteres. El secreto de sesión debe contener al menos 32 bytes. Cambiar el código invalida las cookies emitidas con el código anterior.
 
-El historial se almacena en el navegador mediante localStorage y no se sincroniza entre dispositivos. El contenido que envías se transmite al proveedor seleccionado. No introduzcas secretos en prompts. La limitación incluida en memoria es una protección básica para despliegues pequeños; una instalación pública con varias instancias necesita rate limiting compartido, autenticación, cuotas y protección contra abuso antes de abrir el servicio al público.
+Ejecuta:
 
-El endpoint personalizado se configura exclusivamente en el servidor. Usa HTTPS en producción. No registres API keys ni contenido sensible.
+```powershell
+npm test
+npm run typecheck
+npm run lint
+npm run build
+npm run dev
+```
 
-## Licencia
+Abre `http://localhost:3000`. Sin los tres secretos necesarios, AveroAI permanece cerrada.
 
-Todos los derechos reservados. No se concede una licencia de redistribución.
+## CI y Docker
+
+GitHub Actions ejecuta pruebas, typecheck, ESLint, build de Next.js y Docker build en pushes a `main` y `feature/**`, y en pull requests a `main`. La imagen utiliza Node 22 y la salida standalone de Next.js.
+
+Los secretos se configuran en el entorno local o en el gestor de secretos del hosting. No deben subirse al repositorio.
+
+## Límites de seguridad y publicación
+
+Esta rama está pensada para uso personal/privado; todavía no es una plataforma multiusuario pública:
+
+- El acceso depende de un solo código compartido, no de cuentas individuales.
+- Los límites de login y chat viven en memoria del proceso; no son compartidos entre réplicas ni persisten tras un reinicio.
+- El historial se guarda en `localStorage` y no se sincroniza entre dispositivos.
+- No hay base de datos, cuotas persistentes por usuario ni medición de gasto por usuario.
+- La wallet puede estar configurada y aun así no tener saldo consumible; AveroAI no recarga fondos.
+- No hay hosting ni dominio de producción declarado en el repositorio.
+
+Antes de abrir el servicio al público hacen falta cuentas individuales, almacenamiento persistente, rate limiting distribuido, cuotas por usuario y controles externos de gasto.
+
+## Verificación
+
+Las pruebas automatizadas usan un fixture sintético para comprobar el mapeo del catálogo, el filtrado de modelos offline/no-texto, precios, `traits.default` y resolución de aliases. No es una captura del catálogo vivo.
+
+Un build verde no demuestra que una wallet tenga fondos ni que una inferencia real funcione. Para eso hace falta una prueba controlada con una wallet dedicada y financiada, con un gasto máximo definido previamente.

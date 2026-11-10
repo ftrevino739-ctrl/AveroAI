@@ -1,10 +1,24 @@
-import { models, type ProviderId } from "@/lib/models";
+import { NextRequest } from "next/server";
+import { getVeniceTextCatalog } from "@/lib/venice";
 export const runtime="nodejs";
 export const dynamic="force-dynamic";
-const names:Record<ProviderId,string>={openai:"OpenAI",anthropic:"Anthropic",google:"Google Gemini",openrouter:"OpenRouter",custom:"Endpoint personalizado"};
-export async function GET(){
- const keys:Record<ProviderId,boolean>={openai:Boolean(process.env.OPENAI_API_KEY),anthropic:Boolean(process.env.ANTHROPIC_API_KEY),google:Boolean(process.env.GOOGLE_API_KEY),openrouter:Boolean(process.env.OPENROUTER_API_KEY),custom:Boolean(process.env.CUSTOM_API_KEY&&process.env.CUSTOM_BASE_URL&&process.env.CUSTOM_MODEL_ID)};
- const catalogue=[...models,...(keys.custom&&process.env.CUSTOM_MODEL_ID?[{id:process.env.CUSTOM_MODEL_ID,name:process.env.CUSTOM_MODEL_NAME||"Custom model",provider:names.custom,providerId:"custom" as const,description:"OpenAI-compatible custom model",category:"Open" as const,context:"Provider defined"}]:[])];
- const providers=(Object.keys(names) as ProviderId[]).map(id=>({id,name:names[id],configured:keys[id],models:catalogue.filter(m=>m.providerId===id).length}));
- return Response.json({providers,models:catalogue.map(({id,name,provider,providerId,description,category,context})=>({id,name,provider,providerId,description,category,context,configured:keys[providerId]}))},{headers:{"Cache-Control":"no-store"}});
+const WALLET_KEY_PATTERN=/^0x[0-9a-f]{64}$/i;
+export async function GET(request:NextRequest){
+  const configured=WALLET_KEY_PATTERN.test(process.env.VENICE_WALLET_PRIVATE_KEY||"");
+  const forceRefresh=new URL(request.url).searchParams.get("refresh")==="1";
+  try{
+    const catalog=await getVeniceTextCatalog(forceRefresh);
+    return Response.json({
+      providers:[{id:"venice",name:"Venice AI",configured,models:catalog.models.length}],
+      models:catalog.models,defaultModelId:catalog.defaultModelId,traits:catalog.traits,compatibilityMapping:catalog.compatibilityMapping,
+      connection:{provider:"Venice x402",configured,balance:"not-checked",catalogue:"live",filter:"all-available-text-models"},
+      policy:"Todos los modelos de texto activos del catálogo oficial. Uncensored solo cuando Venice lo confirma."
+    },{headers:{"Cache-Control":"no-store"}});
+  }catch(error){
+    return Response.json({
+      providers:[{id:"venice",name:"Venice AI",configured,models:0}],models:[],defaultModelId:"",
+      connection:{provider:"Venice x402",configured,balance:"not-checked",catalogue:"error"},
+      error:error instanceof Error?error.message:"No se pudo consultar el catálogo oficial de Venice."
+    },{status:502,headers:{"Cache-Control":"no-store"}});
+  }
 }
