@@ -155,7 +155,7 @@ export const modelAccessCatalog: readonly ModelAccessRecord[] = [
       "The licence defines Model-as-a-Service and excludes mere relaying of requests to models hosted by others. Aveiro's exact hosted product structure should receive legal review before activation."
     ],
     deploymentNotes: [
-      "The model card describes 2.8 trillion total parameters, 104 billion activated parameters, native image capability and a 1-million-token context.",
+      "The model card describes 2.8 trillion total parameters, 104 billion activated parameters, MXFP4 weights, native image capability and a 1-million-token context.",\n      "NVIDIA deployment guidance currently lists data-center GPU generations such as B200, B300, GB200 and GB300 for Kimi K3.",
       "This is a data-center-scale deployment candidate, not a model for a normal laptop or single consumer GPU. The full expert weights must be stored and served across suitable infrastructure even though only a subset of experts is activated per token.",
       "Validate the exact MXFP4 checkpoint, compatible inference engine, interconnect, memory, throughput and operational cost before promising availability."
     ],
