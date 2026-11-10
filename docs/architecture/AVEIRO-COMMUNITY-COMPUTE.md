@@ -119,17 +119,16 @@ The repository now contains a standalone first provider-node service in `provide
 - `server.test.mjs` uses a fake local runtime to test health, authentication, signature/body integrity, nonce replay, model allowlisting and streaming.
 - `npm run test:provider-node` is included in GitHub Actions CI.
 
-The prototype is intentionally disconnected from the Next.js chat route and from any public scheduler. It does not register nodes, issue secrets, perform heartbeats, meter usage, or handle image/audio/video. The tests prove protocol behavior against a fake runtime; they do not prove GPU availability, model quality, model licensing or production network security.
+The Next.js server can now be configured with one trusted remote node through private environment variables. When all node settings are valid, the provider catalogue adds the configured model and the chat route signs and forwards requests to that node; end users do not provide an API key. This is a static single-node connection, not a public node marketplace or scheduler. The app reports that the node is configured, not that its GPU/model is live. It still does not register nodes dynamically, issue/revoke secrets, perform heartbeats, meter usage, or handle image/audio/video. Tests prove protocol behavior against a fake runtime and verify control-plane/node signature compatibility; they do not prove GPU availability, model quality, model licensing or production network security.
 
 ## 7. Next implementation gates
 
-1. Run the provider node against a real local OpenAI-compatible inference runtime and one exact license-reviewed open-weight checkpoint.
-2. Add central node onboarding, server-side secret generation/revocation, authenticated heartbeat and readiness checks.
-3. Add a server-side control-plane client that signs requests and dispatches jobs only to registered eligible nodes.
-4. Integrate one selected community model into the model registry as unavailable until a healthy registered node advertises that exact model.
-5. Add end-to-end tests for dispatch, streaming cancellation, timeout, disconnection, capacity exhaustion and retry to another node serving the same exact model.
-6. Add durable usage metering and credits only after the gateway can measure accepted tokens/jobs consistently.
-7. Complete TLS ingress, authentication, quotas, abuse review and privacy disclosures before any public or untrusted node is admitted.
+1. Run the provider node against a real local OpenAI-compatible inference runtime and one exact license-reviewed open-weight checkpoint; the current catalogue entry is only a server-configured declaration.
+2. Add central node onboarding, server-side per-node secret generation/revocation, authenticated heartbeat and readiness checks so static environment configuration can be retired.
+3. Replace the single-node environment adapter with a registry and scheduler that dispatch only to registered, healthy and capacity-eligible nodes serving the exact selected model.
+4. Add end-to-end tests for dispatch, streaming cancellation, timeout, disconnection, capacity exhaustion and retry to another node serving the same exact model.
+5. Add durable usage metering and credits only after the gateway can measure accepted tokens/jobs consistently.
+6. Complete TLS ingress, authentication, quotas, abuse review and privacy disclosures before any public or untrusted node is admitted.
 
 The platform must not silently substitute a proprietary paid model or a different model when a community model is unavailable. It must clearly report capacity unavailability.
 
