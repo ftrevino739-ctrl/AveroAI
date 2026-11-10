@@ -30,6 +30,7 @@ Se toma como referencia un equipo con 8 GB de RAM total y GPU/VRAM no confirmada
 
 | Modelo | Estado de pesos | Tamaño / requisitos | Decisión |
 |---|---|---|---|
+| Qwen 2.5 7B (Alibaba, GGUF oficial) | Modelo open-weight del catálogo Venice, Apache-2.0 | Q2_K 3.02 GB; Q4_K_M 4.68 GB | Es el Qwen 2.5 7B de Venice, pero no recomiendo ejecutarlo con 8 GB totales. |
 | Qwen 2.5 3B Uncensored Test Q4_K_M (TensorBlock) | Derivado comunitario GGUF, Apache-2.0 | Archivo de unos 1.93 GB | Candidato más realista para probar en 8 GB; no es el checkpoint exacto de Venice. |
 | Qwen 2.5 7B Abliterated Q3_K_M (TensorBlock) | Derivado comunitario GGUF, Apache-2.0 | Archivo de unos 3.547 GB; requiere memoria adicional al archivo | No recomendado con 8 GB totales; mejor equipo con 12–16 GB o más. |
 | Venice Uncensored 1.2 | Pesos abiertos, Apache-2.0; Mistral 24B | 24B parámetros; las cuantizaciones comunitarias siguen siendo grandes | No cabe en 8 GB. |
@@ -37,7 +38,7 @@ Se toma como referencia un equipo con 8 GB de RAM total y GPU/VRAM no confirmada
 | DeepSeek V4.1 Flash 1017 Uncensored | Pesos abiertos, MIT; MoE de 552B totales | FP8 y cuantizaciones comunitarias enormes; 8B/16B activos no significan un modelo de 8B | No cabe en 8 GB. |
 | Kimi K3.1 Pro | Open weights, licencia propia de Moonshot; 2.8T totales | Enorme modelo MoE | No cabe en 8 GB. |
 
-El preset inicial de 3B es una variante comunitaria de Qwen 2.5, no una copia exacta del modelo Qwen 2.5 7B que Venice ofrece. “Uncensored” o “abliterated” indica un ajuste para reducir negativas; no garantiza respuestas correctas, ausencia total de rechazos ni que todos los usos estén permitidos. Respeta la licencia de cada peso.
+El modelo Qwen 2.5 7B sí corresponde al checkpoint instruct oficial de Alibaba que Venice lista como open-weight. La versión Q2_K de 3.02 GB se puede descargar, pero 8 GB totales de RAM no dejan margen seguro para Windows, contexto y caché. El preset de 3B es una variante comunitaria de Qwen 2.5; no es el checkpoint exacto de Venice. “Uncensored” o “abliterated” indica un ajuste para reducir negativas; no garantiza respuestas correctas, ausencia total de rechazos ni que todos los usos estén permitidos. Respeta la licencia de cada peso.
 
 ## Instalar el modelo ligero para 8 GB
 
