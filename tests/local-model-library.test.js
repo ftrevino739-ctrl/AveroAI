@@ -12,7 +12,7 @@ test("does not claim a community derivative is the exact Venice checkpoint", () 
   const qwen = LOCAL_MODEL_LIBRARY.find((model) => model.id === "qwen25-3b-uncensored-q4km");
   assert.equal(qwen.listedByVenice, false);
   assert.equal(LOCAL_MODEL_LIBRARY.find((model) => model.id === "qwen25-7b-official-q2k").listedByVenice, true);
-  assert.equal(LOCAL_MODEL_LIBRARY.find((model) => model.id === "venice-uncensored-1-2").exactVeniceCheckpoint, true);
+  assert.equal(LOCAL_MODEL_LIBRARY.find((model) => model.id === "venice-uncensored-1-2").listedByVenice, true);
 });
 
 test("identifies the installed 7B local model by its Ollama HF reference", () => {
