@@ -10,7 +10,8 @@ test("only the small community Qwen 2.5 3B preset is marked as an 8 GB candidate
 
 test("does not claim a community derivative is the exact Venice checkpoint", () => {
   const qwen = LOCAL_MODEL_LIBRARY.find((model) => model.id === "qwen25-3b-uncensored-q4km");
-  assert.equal(qwen.exactVeniceCheckpoint, false);
+  assert.equal(qwen.listedByVenice, false);
+  assert.equal(LOCAL_MODEL_LIBRARY.find((model) => model.id === "qwen25-7b-official-q2k").listedByVenice, true);
   assert.equal(LOCAL_MODEL_LIBRARY.find((model) => model.id === "venice-uncensored-1-2").exactVeniceCheckpoint, true);
 });
 
