@@ -43,7 +43,7 @@ export async function GET() {
   }
 
   const catalogue = [
-    ...models,
+    ...models.filter((model) => keys[model.providerId]),
     ...(keys.custom && process.env.CUSTOM_MODEL_ID
       ? [{
           id: process.env.CUSTOM_MODEL_ID,
