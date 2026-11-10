@@ -10,6 +10,23 @@ Aveiro can pursue a self-hosted community-GPU route for Kimi K2.5 and Kimi K3 be
 
 GPT/ChatGPT and Claude are proprietary hosted services. Aveiro cannot download their service-model weights and place them on volunteer GPUs. To include those models, Aveiro needs its own authorized commercial/API access (or another written, explicitly authorized hosting/reseller agreement), cost controls and compliance with the provider's terms.
 
+## Expanded multi-provider roadmap
+
+Aveiro is intended to be provider-agnostic. The catalogue should include leading model families from multiple organizations while distinguishing official hosted services from open-weight models that can run on community nodes.
+
+| Family | Target examples | Access route | Community hosting |
+|---|---|---|---|
+| OpenAI flagship | GPT-6 Astra, GPT-6.1 Sol | Official OpenAI API/business access | No; proprietary hosted models |
+| Anthropic | Claude Opus / Sonnet / Haiku | Official Anthropic API/business access | No; proprietary hosted models |
+| Google | Gemini family | Official Gemini API / Google Cloud | No; evaluate Gemma separately |
+| DeepSeek | V4 Pro / V4 Flash and later releases | Open weights where published, or official API | Yes, after reviewing each checkpoint |
+| Alibaba | Qwen family, including Qwen3.5 | Open weights where published, or official hosted service | Yes, after reviewing each checkpoint |
+| Moonshot | Kimi K2.5 / K3 and later releases | Open weights where published, or official API | Yes, after reviewing each checkpoint |
+
+The current OpenAI API catalogue lists GPT-6 Astra and GPT-6.1 Sol. These are hosted proprietary models, not weights available for community deployment. Exact model IDs, pricing and access terms must be checked at integration time.
+
+Gemini, DeepSeek and Qwen each contain multiple model releases with different hosting and licensing conditions. Aveiro must review the exact model and checkpoint, not apply one family-wide licence assumption.
+
 ## Decision matrix
 
 | Model family | Public weights for self-hosting? | Licence / terms | Can Aveiro put it on volunteer nodes? | Main blocker |
