@@ -1,63 +1,96 @@
 # AveroAI
 
-AveroAI es una aplicación privada de Next.js para conversar desde una interfaz propia con los modelos de texto publicados por Venice AI. **Venice ejecuta la inferencia y aloja los modelos; AveroAI no entrena modelos ni aloja sus pesos.** AveroAI no es el sitio oficial de Venice.
+AveroAI es una aplicación privada de Next.js que ofrece una interfaz propia para conversar con los modelos de texto disponibles en Venice AI. **AveroAI es la interfaz y el enrutador; Venice proporciona el catálogo, la infraestructura de inferencia y el acceso a los modelos.** No entrenamos ni alojamos los pesos de esos modelos y no nos presentamos como el sitio oficial de Venice.
 
-## Funciones actuales
+## Qué modelos usa
 
-- Catálogo dinámico de modelos de texto, traits y mapa oficial de aliases de Venice.
-- Selector de modelos con selección inicial basada en \`traits.default\`.
-- Chat server-side con streaming; la clave de wallet nunca llega al navegador.
-- Límite de salida ajustable (1.024, 2.048, 4.096 u 8.192 tokens), con límite absoluto de servidor.
-- Historial local, exportación JSON, temas claro/oscuro y adjuntos de texto de hasta 150 KB.
-- Acceso privado por código compartido y cookie HttpOnly firmada.
+El backend consulta el catálogo vivo de Venice mediante `GET /models?type=text`, además de sus endpoints de traits y compatibilidad. El selector usa los IDs reales que devuelve Venice y los envía sin sustituirlos a `POST /chat/completions`. Por tanto, las respuestas las genera el modelo seleccionado a través de la infraestructura de Venice; no es una simulación de Venice ni una capa que solo oculte el nombre AveroAI.
 
-## Autenticación, pagos y límites
+El catálogo de Venice puede incluir modelos de distintos desarrolladores y familias. Que un modelo aparezca en Venice significa que Venice lo ofrece mediante su API; no significa que AveroAI posea o entrene ese modelo. El inventario cambia, por eso no fijamos la lista de IDs en el código.
 
-Esta versión usa \`venice-x402-client@0.2.0\` y una wallet EVM en Base (chain ID 8453). \`createAuthFetch()\` añade autenticación SIWX; **esta app no llama a \`topUp()\`, no firma pagos automáticos y no recarga la wallet**. Un HTTP 402 se muestra al usuario. Puede corresponder a credenciales, saldo apto para x402 o límites de gasto de la cuenta; no debe interpretarse automáticamente como falta de saldo.
+Esta versión integra **chat de texto**. Aunque el catálogo publique capacidades de visión, audio, vídeo o herramientas, esas capacidades no están activadas en la interfaz actual. Se deben añadir flujos y endpoints específicos antes de anunciarlas como funciones de AveroAI.
 
-El backend envía \`max_completion_tokens\`, que sustituye al parámetro anterior \`max_tokens\`. El stream muestra texto final y no expone \`reasoning_content\`. Los metadatos de visión, audio, vídeo y function calling no significan que esas modalidades o herramientas estén integradas en esta UI.
+## Funciones
 
-El acceso actual es de un solo código compartido, no cuentas multiusuario. Los rate limits son mapas en memoria y se reinician con el proceso; el historial vive en el navegador. No hay base de datos, cuotas persistentes ni contabilidad de gasto por usuario. **Mantén el proyecto privado y la wallet con saldo limitado. No lo publiques como un servicio multiusuario todavía.**
+- Catálogo dinámico de modelos de texto, traits, compatibilidades, capacidades y precios publicados.
+- Modelo inicial basado en `traits.default`, con fallback al primer modelo activo disponible.
+- Resolución de aliases solo cuando su destino existe en el catálogo actual.
+- Chat en streaming desde el backend; la clave privada de la wallet nunca llega al navegador.
+- Límite de salida configurable de 1.024, 2.048, 4.096 u 8.192 tokens, con un máximo absoluto de 8.192 en el servidor.
+- Historial local, exportación JSON, tema claro/oscuro y adjuntos de texto de hasta 150 KB.
+- Puerta privada por código compartido y cookie HttpOnly firmada de siete días.
+- Consulta de saldo Venice x402/DIEM de solo lectura desde Ajustes.
 
-## Instalación (Windows PowerShell)
+## Autenticación y pagos
 
-Requiere Node.js 22 recomendado y Git.
+Se utiliza `venice-x402-client@0.2.0` con una wallet EVM en Base (chain ID 8453). `createAuthFetch()` firma una autenticación SIWX nueva para cada petición. El endpoint de saldo usa `VeniceClient.getBalance()`; muestra por separado el crédito x402 en USD y el saldo DIEM vinculado.
 
-\`\`\`powershell
+**No hay recarga automática ni pagos iniciados por AveroAI.** La aplicación no llama a `topUp()` y no firma transferencias de USDC. Una respuesta HTTP 402 se muestra como un requisito de pago/autenticación de Venice; el significado concreto depende del cuerpo y los encabezados de la respuesta. No se debe asumir que todo 402 significa únicamente saldo cero.
+
+No uses tu wallet principal. Configura una wallet dedicada con fondos limitados. Nunca pegues la clave privada en chats, en el navegador o en GitHub.
+
+## Configuración local (Windows PowerShell)
+
+Requisitos: Node.js 22 recomendado y Git.
+
+```powershell
 git clone https://github.com/ftrevino739-ctrl/AveroAI.git
 cd AveroAI
 git checkout feature/venice-x402-keyless
 npm install
 Copy-Item .env.example .env.local
 notepad .env.local
-\`\`\`
+```
 
-Configura en \`.env.local\`:
+Configura estos valores en `.env.local`:
 
-\`\`\`env
+```env
 VENICE_WALLET_PRIVATE_KEY=0x...clave_hex_de_32_bytes
-AVERO_ACCESS_CODE=un_codigo_largo_de_16_caracteres_o_mas
+AVERO_ACCESS_CODE=un_codigo_privado_largo_de_16_caracteres_o_mas
 AVERO_SESSION_SECRET=secreto_aleatorio_de_32_bytes_o_mas
-\`\`\`
+```
 
-Genera el secreto en PowerShell:
+Genera el secreto de sesión con PowerShell:
 
-\`\`\`powershell
+```powershell
 [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(48))
-\`\`\`
+```
 
-No pegues la clave privada en chats ni la subas a Git. Usa una wallet EVM dedicada en Base, no tu wallet principal. El secreto de sesión debe tener 32 bytes como mínimo; el código debe tener 16 caracteres como mínimo. Cambiar el código invalida las cookies anteriores.
+El código de acceso debe tener al menos 16 caracteres. El secreto de sesión debe contener al menos 32 bytes. Cambiar el código invalida las cookies emitidas con el código anterior.
 
-\`\`\`powershell
+Ejecuta:
+
+```powershell
 npm test
 npm run typecheck
 npm run lint
 npm run build
 npm run dev
-\`\`\`
+```
 
-Abre \`http://localhost:3000\`. GitHub Actions ejecuta pruebas, typecheck, lint, build y Docker build. El Dockerfile usa Node 22 y salida standalone.
+Abre `http://localhost:3000`. Sin los tres secretos necesarios, AveroAI permanece cerrada.
 
-## Verificación pendiente antes de cualquier publicación
+## CI y Docker
 
-Un build verde no demuestra que una wallet esté financiada ni que Venice acepte una inferencia por SIWX/x402. Hace falta una prueba controlada con wallet dedicada y saldo limitado. Aún no se declara dominio, hosting ni despliegue de producción. Para abrirlo al público faltan cuentas, almacenamiento persistente, rate limiting distribuido, cuotas por usuario y controles externos de gasto.
+GitHub Actions ejecuta pruebas, typecheck, ESLint, build de Next.js y Docker build en pushes a `main` y `feature/**`, y en pull requests a `main`. La imagen utiliza Node 22 y la salida standalone de Next.js.
+
+Los secretos se configuran en el entorno local o en el gestor de secretos del hosting. No deben subirse al repositorio.
+
+## Límites de seguridad y publicación
+
+Esta rama está pensada para uso personal/privado; todavía no es una plataforma multiusuario pública:
+
+- El acceso depende de un solo código compartido, no de cuentas individuales.
+- Los límites de login y chat viven en memoria del proceso; no son compartidos entre réplicas ni persisten tras un reinicio.
+- El historial se guarda en `localStorage` y no se sincroniza entre dispositivos.
+- No hay base de datos, cuotas persistentes por usuario ni medición de gasto por usuario.
+- La wallet puede estar configurada y aun así no tener saldo consumible; AveroAI no recarga fondos.
+- No hay hosting ni dominio de producción declarado en el repositorio.
+
+Antes de abrir el servicio al público hacen falta cuentas individuales, almacenamiento persistente, rate limiting distribuido, cuotas por usuario y controles externos de gasto.
+
+## Verificación
+
+Las pruebas automatizadas usan un fixture sintético para comprobar el mapeo del catálogo, el filtrado de modelos offline/no-texto, precios, `traits.default` y resolución de aliases. No es una captura del catálogo vivo.
+
+Un build verde no demuestra que una wallet tenga fondos ni que una inferencia real funcione. Para eso hace falta una prueba controlada con una wallet dedicada y financiada, con un gasto máximo definido previamente.
