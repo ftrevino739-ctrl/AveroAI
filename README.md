@@ -1,6 +1,5 @@
 # AveroAI
 
-**Una idea. Muchas posibilidades.**
 
 AveroAI es un espacio de chat multimodelo con una interfaz Liquid Glass, historial local, selector de modelos y un gateway de inferencia en servidor.
 
