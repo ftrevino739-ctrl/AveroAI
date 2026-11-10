@@ -1,64 +1,80 @@
-# AveroAI
+# AveroAI — motor local
 
-AveroAI es una aplicación privada de Next.js que ofrece una interfaz propia para conversar con los modelos de texto disponibles en Venice AI. **AveroAI es la interfaz y el enrutador; Venice proporciona el catálogo, la infraestructura de inferencia y el acceso a los modelos.** No entrenamos ni alojamos los pesos de esos modelos y no nos presentamos como el sitio oficial de Venice.
+AveroAI es una interfaz privada de chat con identidad visual propia. En esta rama, **la generación se ejecuta en el equipo del usuario mediante Ollama y pesos descargados localmente**. AveroAI no usa la API de Venice, no manda prompts a Venice y no tiene wallet ni pagos x402.
 
-## Qué modelos usa
+## Cómo funciona
 
-El backend consulta el catálogo vivo de Venice mediante `GET /models?type=text`, además de sus endpoints de traits y compatibilidad. El selector usa los IDs reales que devuelve Venice y los envía sin sustituirlos a `POST /chat/completions`. Por tanto, las respuestas las genera el modelo seleccionado a través de la infraestructura de Venice; no es una simulación de Venice ni una capa que solo oculte el nombre AveroAI.
+```text
+Navegador
+   │
+AveroAI (Next.js, en el mismo PC)
+   │
+Ollama local (127.0.0.1:11434)
+   │
+Pesos GGUF instalados en el disco
+   │
+CPU / GPU local
+```
 
-El catálogo de Venice puede incluir modelos de distintos desarrolladores y familias. Que un modelo aparezca en Venice significa que Venice lo ofrece mediante su API; no significa que AveroAI posea o entrene ese modelo. El inventario cambia, por eso no fijamos la lista de IDs en el código.
+La API interna de Ollama en localhost solo es el puente local entre AveroAI y el motor de inferencia. No es una API de Venice ni un servicio remoto. Para el modo local, AveroAI y Ollama deben ejecutarse en el mismo equipo. Un despliegue de AveroAI en un hosting remoto no puede acceder al `127.0.0.1` del visitante.
 
-Esta versión integra **chat de texto**. Aunque el catálogo publique capacidades de visión, audio, vídeo o herramientas, esas capacidades no están activadas en la interfaz actual. Se deben añadir flujos y endpoints específicos antes de anunciarlas como funciones de AveroAI.
+## Catálogo investigado en Venice
 
-## Funciones
+El catálogo de Venice publica modelos de varios proveedores. Su filtro de pesos distingue entre modelos abiertos (el creador publicó los pesos) y cerrados (solo disponibles mediante la API del creador). La lista de modelos cambia y los recuentos incluyen texto, imagen, vídeo y audio; no todos son modelos LLM ni todos son descargables.
 
-- Catálogo dinámico de modelos de texto, traits, compatibilidades, capacidades y precios publicados.
-- Modelo inicial basado en `traits.default`, con fallback al primer modelo activo disponible.
-- Resolución de aliases solo cuando su destino existe en el catálogo actual.
-- Chat en streaming desde el backend; la clave privada de la wallet nunca llega al navegador.
-- Límite de salida configurable de 1.024, 2.048, 4.096 u 8.192 tokens, con un máximo absoluto de 8.192 en el servidor.
-- Historial local, exportación JSON, tema claro/oscuro y adjuntos de texto de hasta 150 KB.
-- Puerta privada por código compartido y cookie HttpOnly firmada de siete días.
-- Consulta de saldo Venice x402/DIEM de solo lectura desde Ajustes.
+AveroAI conserva metadatos y enlaces de origen, pero no incluye archivos de pesos dentro de GitHub, Docker ni el despliegue web.
 
-## Autenticación y pagos
+### Selección honesta para este equipo
 
-Se utiliza `venice-x402-client@0.2.0` con una wallet EVM en Base (chain ID 8453). `createAuthFetch()` firma una autenticación SIWX nueva para cada petición. El endpoint de saldo usa `VeniceClient.getBalance()`; muestra por separado el crédito x402 en USD y el saldo DIEM vinculado.
+Se toma como referencia un equipo con 8 GB de RAM total y GPU/VRAM no confirmada.
 
-**No hay recarga automática ni pagos iniciados por AveroAI.** La aplicación no llama a `topUp()` y no firma transferencias de USDC. Una respuesta HTTP 402 se muestra como un requisito de pago/autenticación de Venice; el significado concreto depende del cuerpo y los encabezados de la respuesta. No se debe asumir que todo 402 significa únicamente saldo cero.
+| Modelo | Estado de pesos | Tamaño / requisitos | Decisión |
+|---|---|---|---|
+| Qwen 2.5 3B Uncensored Test Q4_K_M (TensorBlock) | Derivado comunitario GGUF, Apache-2.0 | Archivo de unos 1.93 GB | Candidato más realista para probar en 8 GB; no es el checkpoint exacto de Venice. |
+| Qwen 2.5 7B Abliterated Q3_K_M (TensorBlock) | Derivado comunitario GGUF, Apache-2.0 | Archivo de unos 3.547 GB; requiere memoria adicional al archivo | No recomendado con 8 GB totales; mejor equipo con 12–16 GB o más. |
+| Venice Uncensored 1.2 | Pesos abiertos, Apache-2.0; Mistral 24B | 24B parámetros; las cuantizaciones comunitarias siguen siendo grandes | No cabe en 8 GB. |
+| Gemma 4 Uncensored | Pesos abiertos según la ficha de Venice; 26B totales / ~4B activos | Los parámetros activos no representan el tamaño completo de los pesos | No cabe en 8 GB. |
+| DeepSeek V4.1 Flash 1017 Uncensored | Pesos abiertos, MIT; MoE de 552B totales | FP8 y cuantizaciones comunitarias enormes; 8B/16B activos no significan un modelo de 8B | No cabe en 8 GB. |
+| Kimi K3.1 Pro | Open weights, licencia propia de Moonshot; 2.8T totales | Enorme modelo MoE | No cabe en 8 GB. |
 
-No uses tu wallet principal. Configura una wallet dedicada con fondos limitados. Nunca pegues la clave privada en chats, en el navegador o en GitHub.
+El preset inicial de 3B es una variante comunitaria de Qwen 2.5, no una copia exacta del modelo Qwen 2.5 7B que Venice ofrece. “Uncensored” o “abliterated” indica un ajuste para reducir negativas; no garantiza respuestas correctas, ausencia total de rechazos ni que todos los usos estén permitidos. Respeta la licencia de cada peso.
 
-## Configuración local (Windows PowerShell)
+## Instalar el modelo ligero para 8 GB
 
-Requisitos: Node.js 22 recomendado y Git.
+Recomendación inicial: cerrar aplicaciones pesadas y probar con contexto moderado. La RAM real necesaria es mayor que el tamaño del archivo GGUF; Windows también necesita memoria. Si el sistema empieza a usar mucho archivo de paginación o se queda sin memoria, detén el modelo.
+
+1. Instala Ollama para Windows desde https://ollama.com/download.
+2. Abre PowerShell y ejecuta:
+
+```powershell
+ollama run hf.co/tensorblock/Qwen2.5-3B-Instruct-Uncensored-Test-GGUF:Q4_K_M
+```
+
+El primer inicio descarga los pesos desde Hugging Face. El modelo Q4_K_M ocupa aproximadamente 1.93 GB en disco. El modelo puede tardar en cargar y generar despacio en CPU.
+3. Deja Ollama abierto. AveroAI detectará modelos instalados automáticamente.
+
+Para intentar la variante de 7B (no recomendada con 8 GB totales):
+
+```powershell
+ollama run hf.co/tensorblock/Qwen2.5-7B-Instruct-abliterated-GGUF:Q3_K_M
+```
+
+No instales los modelos 24B, 26B, 552B o 2.8T en este equipo.
+
+## Ejecutar AveroAI localmente
+
+Requisitos: Node.js 22, Git y Ollama instalado.
 
 ```powershell
 git clone https://github.com/ftrevino739-ctrl/AveroAI.git
 cd AveroAI
-git checkout feature/venice-x402-keyless
+git checkout feature/local-models-8gb
 npm install
 Copy-Item .env.example .env.local
 notepad .env.local
 ```
 
-Configura estos valores en `.env.local`:
-
-```env
-VENICE_WALLET_PRIVATE_KEY=0x...clave_hex_de_32_bytes
-AVERO_ACCESS_CODE=un_codigo_privado_largo_de_16_caracteres_o_mas
-AVERO_SESSION_SECRET=secreto_aleatorio_de_32_bytes_o_mas
-```
-
-Genera el secreto de sesión con PowerShell:
-
-```powershell
-[Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(48))
-```
-
-El código de acceso debe tener al menos 16 caracteres. El secreto de sesión debe contener al menos 32 bytes. Cambiar el código invalida las cookies emitidas con el código anterior.
-
-Ejecuta:
+Configura `AVERO_ACCESS_CODE` (16 caracteres como mínimo) y `AVERO_SESSION_SECRET` (32 bytes como mínimo). La URL de Ollama por defecto es `http://127.0.0.1:11434`.
 
 ```powershell
 npm test
@@ -68,29 +84,20 @@ npm run build
 npm run dev
 ```
 
-Abre `http://localhost:3000`. Sin los tres secretos necesarios, AveroAI permanece cerrada.
+Abre `http://localhost:3000`. La sección de ajustes muestra los modelos instalados y una biblioteca curada con el tamaño, licencia, fuente y comando de importación.
 
-## CI y Docker
+## Hosting gratuito: límite importante
 
-GitHub Actions ejecuta pruebas, typecheck, ESLint, build de Next.js y Docker build en pushes a `main` y `feature/**`, y en pull requests a `main`. La imagen utiliza Node 22 y la salida standalone de Next.js.
+Un hosting gratuito puede alojar una landing page o la interfaz, pero no proporciona automáticamente GPU/RAM para estos modelos. Si AveroAI se aloja remotamente, el backend remoto no puede usar la RAM de tu PC. Para conservar inferencia sin API externa, AveroAI y Ollama se deben ejecutar en el mismo PC, o se necesitaría un cliente/compañero local instalado junto a la web. Para dar inferencia local a otras personas, cada persona tendría que ejecutar sus propios pesos o habría que pagar un servidor con GPU.
 
-Los secretos se configuran en el entorno local o en el gestor de secretos del hosting. No deben subirse al repositorio.
+## Seguridad y privacidad
 
-## Límites de seguridad y publicación
+- No hay llamadas a Venice ni proveedores externos para generar respuestas.
+- No hay claves privadas de wallet ni recargas.
+- Los pesos se descargan desde la fuente del creador directamente al dispositivo; no se suben al repositorio.
+- El servidor local por defecto escucha en localhost. No lo expongas públicamente ni abras el puerto 11434 al Internet sin autenticación y controles adecuados.
+- El código de acceso es compartido y las sesiones usan cookie HttpOnly; no es una solución multiusuario para publicación pública.
 
-Esta rama está pensada para uso personal/privado; todavía no es una plataforma multiusuario pública:
+## Estado y verificaciones
 
-- El acceso depende de un solo código compartido, no de cuentas individuales.
-- Los límites de login y chat viven en memoria del proceso; no son compartidos entre réplicas ni persisten tras un reinicio.
-- El historial se guarda en `localStorage` y no se sincroniza entre dispositivos.
-- No hay base de datos, cuotas persistentes por usuario ni medición de gasto por usuario.
-- La wallet puede estar configurada y aun así no tener saldo consumible; AveroAI no recarga fondos.
-- No hay hosting ni dominio de producción declarado en el repositorio.
-
-Antes de abrir el servicio al público hacen falta cuentas individuales, almacenamiento persistente, rate limiting distribuido, cuotas por usuario y controles externos de gasto.
-
-## Verificación
-
-Las pruebas automatizadas usan un fixture sintético para comprobar el mapeo del catálogo, el filtrado de modelos offline/no-texto, precios, `traits.default` y resolución de aliases. No es una captura del catálogo vivo.
-
-Un build verde no demuestra que una wallet tenga fondos ni que una inferencia real funcione. Para eso hace falta una prueba controlada con una wallet dedicada y financiada, con un gasto máximo definido previamente.
+GitHub Actions verifica pruebas, TypeScript, lint, build y Docker. Esas comprobaciones no sustituyen la prueba real de una descarga ni de inferencia en una máquina con 8 GB. Primero hay que confirmar que Ollama descarga y ejecuta el modelo ligero en el PC objetivo.
