@@ -1,4 +1,4 @@
-export type ProviderId = "venice";
+export type ProviderId = "local";
 
 export type ModelInfo = {
   id: string;
@@ -11,16 +11,6 @@ export type ModelInfo = {
   contextTokens: number;
   uncensored: boolean;
   traits: string[];
-  deprecated?: boolean;
-  deprecation?: {
-    date?: string;
-    removesAt?: string;
-    replacementModelId?: string;
-    autoRemap?: boolean;
-  };
-  inputPrice?: number;
-  outputPrice?: number;
-  maxCompletionTokens?: number;
   privacy?: string;
   supportsVision?: boolean;
   supportsReasoning?: boolean;
