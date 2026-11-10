@@ -57,3 +57,11 @@ html.dark-theme .access-card input{background:#29293d;border-color:#ffffff20;col
 .dark .wallet-balance-grid strong{color:#d6d0f6}
 .dark .wallet-balance-hint{color:#aaa8bb}
 @media(max-width:450px){.wallet-balance-grid{grid-template-columns:1fr}}
+
+
+/* Local model library cards */
+.model-card-actions{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:10px;flex-wrap:wrap}
+.model-card-actions a{font-size:10px;font-weight:650;color:#7068b5;text-decoration:none}
+.dark .model-card-actions a{color:#c7bff5}
+.catalog-card p{font-size:10px;line-height:1.5;color:#808595;margin:6px 0}
+.dark .catalog-card p{color:#b7b5c6}
