@@ -107,15 +107,33 @@ If no eligible provider is online, return a clear capacity-unavailable message. 
 - Establish capacity targets, per-user quotas, rate limits, cost ceilings and transparent availability.
 - Enable proprietary models only after authorized access and a sustainable budget are in place.
 
-## 6. Immediate repository work
+## 6. Current executable provider-node prototype
 
-1. Keep this work on `feature/aveiro-community-compute-foundation`; do not merge experimental local-model or Venice/x402 branches into the public product.
-2. Audit `lib/models.ts`, `app/api/chat/route.ts`, and `app/api/providers` before modifying runtime behavior.
-3. Add tests around provider selection, unknown model IDs, missing credentials, rate limits, timeouts and streaming.
-4. Implement the typed model registry as the first code milestone.
-5. Do not add real credentials, paid fallbacks, fake availability, or claims of free unlimited access.
+The repository now contains a standalone first provider-node service in `provider-node/`:
 
-## 7. Acceptance criteria for the first usable community prototype
+- `server.mjs` exposes minimal liveness, authenticated capabilities, and authenticated text inference endpoints.
+- `signing.mjs` implements HMAC-SHA256 request signing and constant-time signature comparison.
+- Requests include a timestamp and nonce; expired and replayed signed requests are rejected.
+- The node accepts only exact model IDs in its local allowlist and forwards only to a configured loopback OpenAI-compatible inference runtime.
+- Inference responses are streamed as SSE. Request size, message size/count, concurrency, and request timeout are bounded.
+- `server.test.mjs` uses a fake local runtime to test health, authentication, signature/body integrity, nonce replay, model allowlisting and streaming.
+- `npm run test:provider-node` is included in GitHub Actions CI.
+
+The prototype is intentionally disconnected from the Next.js chat route and from any public scheduler. It does not register nodes, issue secrets, perform heartbeats, meter usage, or handle image/audio/video. The tests prove protocol behavior against a fake runtime; they do not prove GPU availability, model quality, model licensing or production network security.
+
+## 7. Next implementation gates
+
+1. Run the provider node against a real local OpenAI-compatible inference runtime and one exact license-reviewed open-weight checkpoint.
+2. Add central node onboarding, server-side secret generation/revocation, authenticated heartbeat and readiness checks.
+3. Add a server-side control-plane client that signs requests and dispatches jobs only to registered eligible nodes.
+4. Integrate one selected community model into the model registry as unavailable until a healthy registered node advertises that exact model.
+5. Add end-to-end tests for dispatch, streaming cancellation, timeout, disconnection, capacity exhaustion and retry to another node serving the same exact model.
+6. Add durable usage metering and credits only after the gateway can measure accepted tokens/jobs consistently.
+7. Complete TLS ingress, authentication, quotas, abuse review and privacy disclosures before any public or untrusted node is admitted.
+
+The platform must not silently substitute a proprietary paid model or a different model when a community model is unavailable. It must clearly report capacity unavailability.
+
+## 8. Acceptance criteria for the first usable community prototype
 
 - A user can chat without supplying a third-party API key.
 - At least one invited provider node serves one license-reviewed open-weight model remotely.
