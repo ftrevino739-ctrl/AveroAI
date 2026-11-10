@@ -53,7 +53,7 @@ async function fixture(t) {
     upstreamBaseUrl: `http://127.0.0.1:${upstreamPort}/v1`,
     maxConcurrent: 2,
     requestTimeoutMs: 10_000,
-    port: 0
+    port: 8787
   });
   const nodePort = await listen(node);
   const baseUrl = `http://127.0.0.1:${nodePort}`;
