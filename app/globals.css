@@ -39,3 +39,21 @@ html.dark-theme .access-card input{background:#29293d;border-color:#ffffff20;col
   .welcome-note{padding:0 8px;line-height:1.6}
   .preference-row{gap:10px}
 }
+
+/* Read-only Venice wallet balance panel */
+.wallet-balance-card{margin-top:14px;padding:13px;border:1px solid #ecebf4;border-radius:13px;background:rgba(255,255,255,.58)}
+.wallet-balance-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.wallet-balance-head>strong{font-size:10px;color:#4c5060}
+.wallet-balance-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.wallet-balance-grid>div{display:flex;flex-direction:column;gap:4px;padding:10px;border-radius:10px;background:#f8f7fc}
+.wallet-balance-grid small{font-size:9px;color:#969aaa}
+.wallet-balance-grid strong{font:700 18px Manrope,sans-serif;color:#4f4b80}
+.wallet-can-consume,.wallet-no-consume{margin-top:9px;font-size:9px;font-weight:700;color:#27835f}
+.wallet-no-consume{color:#b27b35}
+.wallet-balance-hint{font-size:9px;line-height:1.5;color:#9297a3;margin:9px 0 0}
+.dark .wallet-balance-card{background:#29293d;border-color:#ffffff18}
+.dark .wallet-balance-head>strong{color:#eee}
+.dark .wallet-balance-grid>div{background:#202132}
+.dark .wallet-balance-grid strong{color:#d6d0f6}
+.dark .wallet-balance-hint{color:#aaa8bb}
+@media(max-width:450px){.wallet-balance-grid{grid-template-columns:1fr}}

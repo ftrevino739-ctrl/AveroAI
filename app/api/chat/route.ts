@@ -124,6 +124,15 @@ export async function POST(request: NextRequest) {
           try {
             const parsed:unknown=JSON.parse(raw);
             if(!isRecord(parsed))return;
+            if(isRecord(parsed.error)){
+              const message=typeof parsed.error.message==="string"?parsed.error.message:"El proveedor interrumpió la generación.";
+              received=true;controller.enqueue(encoder.encode("\n\n[Error de Venice: "+message.slice(0,500)+"]"));
+              return;
+            }
+            if(parsed.type==="content_filter_error"){
+              received=true;controller.enqueue(encoder.encode("\n\n[Venice bloqueó parte de esta respuesta por sus políticas de contenido.]"));
+              return;
+            }
             // Do not expose reasoning_content as the assistant's user-facing answer.
             const chunk=extractVisibleText(parsed);
             if(chunk){received=true;controller.enqueue(encoder.encode(chunk));}
