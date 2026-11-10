@@ -1,6 +1,5 @@
 import { createServer } from "node:http";
 import { isIP } from "node:net";
-import { once } from "node:events";
 import { pathToFileURL } from "node:url";
 import { verifyRequestSignature } from "./signing.mjs";
 
@@ -26,21 +25,29 @@ function readRawBody(req, limit) {
   return new Promise((resolve, reject) => {
     const chunks = [];
     let size = 0;
+    let rejected = false;
 
     req.on("data", (chunk) => {
+      if (rejected) return;
       size += chunk.length;
       if (size > limit) {
+        rejected = true;
+        chunks.length = 0;
         const error = new Error("Request body is too large.");
         error.statusCode = 413;
         reject(error);
-        req.destroy();
+        req.pause();
         return;
       }
       chunks.push(chunk);
     });
 
-    req.on("end", () => resolve(Buffer.concat(chunks)));
-    req.on("error", reject);
+    req.on("end", () => {
+      if (!rejected) resolve(Buffer.concat(chunks));
+    });
+    req.on("error", (error) => {
+      if (!rejected) reject(error);
+    });
   });
 }
 
@@ -260,7 +267,12 @@ export function createProviderNodeServer(inputConfig) {
     try {
       rawBody = await readRawBody(req, config.maxBodyBytes);
     } catch (error) {
-      return json(res, error.statusCode || 400, { error: error.statusCode === 413 ? error.message : "Could not read request body." });
+      if (error.statusCode === 413 && !res.headersSent) {
+        json(res, 413, { error: error.message });
+        res.once("finish", () => req.destroy());
+        return;
+      }
+      return json(res, 400, { error: "Could not read request body." });
     }
 
     if (isCapabilities && rawBody.length !== 0) {
