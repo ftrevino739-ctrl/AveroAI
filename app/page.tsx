@@ -1,15 +1,15 @@
 "use client";
 import { useEffect,useMemo,useRef,useState } from "react";
 import { Activity, ArrowUp, Atom, Check, ChevronDown, CircleHelp, Command, Copy, Download, FileText, Globe2, Menu, MessageSquarePlus, Moon, Paperclip, PanelLeftClose, Search, Settings2, Sparkles, Sun, Trash2, X, Zap } from "lucide-react";
-import { models } from "@/lib/models";
+import type { ModelInfo } from "@/lib/models";
 
 type Message={role:"user"|"assistant";content:string;modelName?:string};
 type Chat={id:string;title:string;messages:Message[];updatedAt:number};
 const starters=[{icon:"✳",title:"Piensa una idea",sub:"Explora un concepto desde distintos ángulos."},{icon:"↗",title:"Organiza un plan",sub:"Convierte un objetivo en pasos claros."},{icon:"⌘",title:"Construye algo",sub:"Programa, crea y resuelve problemas."}];
 
 export default function Home(){
- const [availableModels,setAvailableModels]=useState(models),[chats,setChats]=useState<Chat[]>([]),[activeId,setActiveId]=useState(""),[hydrated,setHydrated]=useState(false);
- const [modelId,setModelId]=useState(models[0].id),[modelOpen,setModelOpen]=useState(false),[modelQuery,setModelQuery]=useState("");
+ const [availableModels,setAvailableModels]=useState<ModelInfo[]>([]),[chats,setChats]=useState<Chat[]>([]),[activeId,setActiveId]=useState(""),[hydrated,setHydrated]=useState(false);
+ const [modelId,setModelId]=useState(""),[modelOpen,setModelOpen]=useState(false),[modelQuery,setModelQuery]=useState("");
  const [input,setInput]=useState(""),[sending,setSending]=useState(false),[sidebarOpen,setSidebarOpen]=useState(true),[settingsOpen,setSettingsOpen]=useState(false),[dark,setDark]=useState(false),[error,setError]=useState("");
  const [attachment,setAttachment]=useState(""),[copied,setCopied]=useState(false),[providerStatus,setProviderStatus]=useState<Record<string,boolean>>({});
  const bottomRef=useRef<HTMLDivElement>(null),textareaRef=useRef<HTMLTextAreaElement>(null),fileRef=useRef<HTMLInputElement>(null),abortRef=useRef<AbortController|null>(null);
