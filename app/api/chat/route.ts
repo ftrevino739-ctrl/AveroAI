@@ -73,10 +73,14 @@ export async function POST(request: NextRequest) {
   const data = body as { model?: unknown; messages?: unknown };
   const modelId = typeof data.model === "string" ? data.model : "";
 
-  let communityConfig: CommunityNodeConfig | null;
+  let communityConfig: CommunityNodeConfig | null = null;
+  let communityConfigInvalid = false;
   try {
     communityConfig = getCommunityNodeConfig();
   } catch {
+    communityConfigInvalid = true;
+  }
+  if (communityConfigInvalid && modelId === process.env.AVEIRO_COMMUNITY_MODEL_ID) {
     return error("La configuración del nodo comunitario del servidor es inválida.", 503);
   }
 
