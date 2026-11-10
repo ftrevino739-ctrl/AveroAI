@@ -16,7 +16,8 @@ GPT/ChatGPT and Claude are proprietary hosted services. Aveiro cannot download t
 |---|---|---|---|---|
 | OpenAI GPT / ChatGPT service models | No public weights licence | OpenAI business/API terms | No | Authorized provider access and usage costs |
 | Anthropic Claude service models | No public weights licence | Anthropic Commercial Terms for API use | No | Authorized provider access and usage costs |
-| OpenAI gpt-oss-20b / 120b | Yes | Apache 2.0 plus gpt-oss usage policy | Candidate; practical first Aveiro-hosted OpenAI-family models | GPU memory (about 16 GB for 20b; single 80 GB accelerator for 120b per OpenAI docs) |\n| Moonshot Kimi K2.5 | Yes | Modified MIT License | Candidate, after technical and legal review | Large model deployment; preserve notices and comply with special display clause |
+| OpenAI gpt-oss-20b / 120b | Yes | Apache 2.0 plus gpt-oss usage policy | Candidate; practical first Aveiro-hosted OpenAI-family models | GPU memory (about 16 GB for 20b; single 80 GB accelerator for 120b per OpenAI docs) |
+| Moonshot Kimi K2.5 | Yes | Modified MIT License | Candidate, after technical and legal review | Large model deployment; preserve notices and comply with special display clause |
 | Moonshot Kimi K3 | Yes | Kimi K3 License | Candidate, after technical and legal review | Extremely large distributed serving; possible separate agreement threshold for Model-as-a-Service |
 
 ## OpenAI gpt-oss — the open-weight alternative to ChatGPT models
@@ -89,7 +90,9 @@ Sources:
 |---|---|---|---|
 | GPT | High: commercial API/partner permission | Low for Aveiro (provider operates GPUs), but usage is billed | Add only after budget and authorization |
 | Claude | High: Commercial Terms and API billing | Low for Aveiro (provider operates GPUs), but usage is billed | Add only after budget and authorization |
-| OpenAI gpt-oss-20b | Low-to-moderate: Apache 2.0 plus usage policy | Moderate: about 16 GB memory | Recommended first hosted model for Aveiro |\n| OpenAI gpt-oss-120b | Low-to-moderate: Apache 2.0 plus usage policy | High: single 80 GB accelerator | Good second hosted model when an 80 GB node is available |\n| Kimi K2.5 | Moderate: Modified MIT conditions and notices | Very high: 1T total parameters, MoE, distributed deployment | Later phase, after a multi-GPU provider is secured |
+| OpenAI gpt-oss-20b | Low-to-moderate: Apache 2.0 plus usage policy | Moderate: about 16 GB memory | Recommended first hosted model for Aveiro |
+| OpenAI gpt-oss-120b | Low-to-moderate: Apache 2.0 plus usage policy | High: single 80 GB accelerator | Good second hosted model when an 80 GB node is available |
+| Kimi K2.5 | Moderate: Modified MIT conditions and notices | Very high: 1T total parameters, MoE, distributed deployment | Later phase, after a multi-GPU provider is secured |
 | Kimi K3 | Moderate-to-high: special MaaS threshold and attribution terms | Extreme: 2.8T total parameters, 104B activated, large distributed serving | Later phase, not the first prototype |
 
 Kimi K2.5's model card lists vLLM, SGLang and KTransformers as recommended inference engines. K2.5 supports image input. The card describes video chat as experimental and currently supported only by the official API, so Aveiro must not advertise video input for a community deployment until it is independently verified.
