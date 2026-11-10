@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { NextRequest } from "next/server";
 import { models, type ProviderId } from "@/lib/models";
+import type { CommunityNodeConfig } from "@/lib/community-node";
 import {
   communityNodeEndpoint,
   getCommunityNodeConfig,
@@ -72,7 +73,7 @@ export async function POST(request: NextRequest) {
   const data = body as { model?: unknown; messages?: unknown };
   const modelId = typeof data.model === "string" ? data.model : "";
 
-  let communityConfig;
+  let communityConfig: CommunityNodeConfig | null;
   try {
     communityConfig = getCommunityNodeConfig();
   } catch {
