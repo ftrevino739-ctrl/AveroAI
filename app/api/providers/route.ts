@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 const OLLAMA_BASE = (process.env.AVERO_OLLAMA_URL || "http://127.0.0.1:11434").replace(/\/$/, "");
 
-function isRecord(value: unknown): value is Record<string, any> {
+function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
@@ -25,14 +25,13 @@ export async function GET() {
       const id = typeof row.name === "string" ? row.name : typeof row.model === "string" ? row.model : "";
       if (!id || id.length > 240) return [];
       const match = getLocalModelByOllamaTag(id);
-      const details = isRecord(row.details) ? row.details : {};
       return [{
         id,
         name: match?.name || id,
         provider: "Ollama · ejecución local",
-        providerId: "local",
+        providerId: "local" as const,
         description: match?.note || "Modelo instalado en el motor local Ollama.",
-        category: "Open",
+        category: "Open" as const,
         context: "Local",
         contextTokens: 0,
         uncensored: match?.uncensored ?? /uncensored|abliterated|heretic/i.test(id),
