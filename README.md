@@ -16,6 +16,14 @@ Aveiro.ai es una plataforma web multimodelo en desarrollo, con interfaz Liquid G
 - Las credenciales del servidor no se exponen al navegador.
 - GitHub Actions comprueba tipos, lint, pruebas del nodo, compilación de producción y build Docker.
 
+## Experiencia del usuario final: solo navegador
+
+**Aveiro.ai no requiere instalar nada en el dispositivo del usuario.** El usuario entra desde la web pública, elige un modelo y conversa. No necesita Node.js, Python, Docker, extensiones, aplicación de escritorio, modelos descargados, GPU propia ni API keys personales. Toda inferencia ocurre en infraestructura remota autorizada por Aveiro.
+
+Las instrucciones de instalación que aparecen a continuación son exclusivamente para desarrolladores que quieran ejecutar el proyecto durante su desarrollo. La instalación del Provider Node corresponde únicamente a voluntarios/organizaciones que decidan aportar GPU desde una máquina remota propia; nunca forma parte del registro ni del uso normal de Aveiro.
+
+Contrato completo de producto y criterios de aceptación: [End-user installation and remote execution contract](docs/architecture/END-USER-EXPERIENCE.md).
+
 ## Requisitos e instalación
 
 Requiere Node.js 20.9 o superior. Para probar solo el chat existente, configura una API key de proveedor en el servidor. Para probar la ruta comunitaria, configura un Provider Node remoto siguiendo la sección correspondiente; los usuarios finales no necesitan API keys.
