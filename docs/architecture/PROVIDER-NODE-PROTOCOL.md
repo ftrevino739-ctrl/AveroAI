@@ -1,6 +1,6 @@
 # Aveiro Provider Node Protocol v1
 
-**Status:** executable single-node prototype; not yet connected to the public control plane.  
+**Status:** executable provider-node protocol with signed outbound registry heartbeat; chat scheduling is not yet connected to the registry.  
 **Transport:** HTTPS is required outside a private development environment.  
 **Scope:** text-only inference through a provider's local OpenAI-compatible runtime.
 
@@ -35,6 +35,18 @@ The HMAC key is the per-node AVEIRO_NODE_SECRET. For a GET request the raw body 
 The node accepts timestamps within 60 seconds of its local clock and stores accepted nonces in memory for two minutes. A repeated nonce is rejected. The node secret must be unique per node, stored only in server-side secret storage, rotated after suspected exposure, and never included in logs or browser code.
 
 The control plane must generate a fresh cryptographically random nonce and timestamp for every request. It must use constant-time signature comparison. Protect the service with TLS and network-level ingress restrictions; HMAC does not encrypt prompts.
+
+## Outbound control-plane heartbeat
+
+An invited node can report availability to the Aveiro registry by configuring `AVEIRO_CONTROL_PLANE_URL` on the provider machine. It sends:
+
+- `POST /api/provider-nodes/heartbeat` every 30 seconds (configurable from 10 to 120 seconds).
+- The same HMAC-SHA256 signing format described above, with a fresh 13-digit timestamp and random nonce for every request.
+- A compact payload containing the node ID, exact runtime-advertised model IDs, active jobs, maximum concurrency, runtime identifier and a `ready` / `unavailable` status.
+
+Before sending the heartbeat, the node queries its local OpenAI-compatible `GET /v1/models` endpoint. It reports only IDs that are both present in the runtime response and in the node's configured allowlist. A process that is running while its model runtime is down therefore reports unavailable rather than ready. Heartbeats never contain conversation messages, end-user identity or provider API credentials.
+
+The control plane accepts only registered, non-revoked node IDs, verifies the per-node signature and uses Redis `SET NX EX` to reject nonce replay across application instances. The HMAC secret is AES-256-GCM encrypted at rest. A node becomes offline after 90 seconds without a valid heartbeat.
 
 ## Endpoints
 
@@ -116,7 +128,7 @@ The control plane must not silently send the request to another model or paid pr
 
 ## Deliberate v1 limitations
 
-- No central node registration, heartbeat, scheduler, revocation endpoint or credits ledger.
+- Central registration, admin revocation and signed readiness heartbeat are implemented, but dynamic registry nodes are not yet used by the chat scheduler.
 - No streaming cancellation acknowledgment or usage metering yet.
 - No image, audio, video or file payload support.
 - Nonces are stored in process memory; multi-process deployments need a shared replay store or sticky routing.
@@ -124,4 +136,4 @@ The control plane must not silently send the request to another model or paid pr
 - No claim that node operators cannot read prompts.
 - No public production readiness claim.
 
-Before adding public nodes, the control plane must implement node onboarding, per-node secret issuance/revocation, signed job creation, TLS enforcement, health/readiness checks, streaming cancellation, auditable metering, abuse controls and security review.
+Before routing public traffic to community nodes, the control plane must implement multi-node scheduling, signed job dispatch, TLS enforcement and ingress restrictions, streaming cancellation, auditable metering, abuse controls and security review. Registration and readiness heartbeats alone are not sufficient to admit a node to production inference.
