@@ -15,7 +15,7 @@ This is the first executable provider-node prototype for Aveiro Community Comput
 ## What it does not do yet
 
 - Registration is provisioned by an Aveiro administrator; the node does not self-register or select its own approved models.
-- It sends signed availability heartbeats when `AVEIRO_CONTROL_PLANE_URL` is configured, but it is not yet selected by the chat scheduler.
+- It sends signed readiness heartbeats when `AVEIRO_CONTROL_PLANE_URL` is configured. The Aveiro catalogue and first-pass chat scheduler can select it only while the heartbeat is fresh, the exact model is approved and advertised, and a concurrency slot is available.
 - It does not download, install, or select model weights.
 - It does not verify a model licence automatically. An operator must approve the exact checkpoint and terms before allowing it.
 - It does not provide TLS, user authentication, usage credits, billing, moderation, or a production abuse-control system.
@@ -89,7 +89,7 @@ An Aveiro administrator first creates an invited provider through the private `P
 
 Set `AVEIRO_CONTROL_PLANE_URL` to the public Aveiro HTTPS origin. The node then sends a signed heartbeat every 30 seconds to `POST /api/provider-nodes/heartbeat`. Before reporting readiness, it queries its local runtime's `GET /v1/models` endpoint and reports only exact allowlisted IDs that the runtime actually advertises. The heartbeat contains no prompts, user identity or provider API keys.
 
-An administrator can inspect node status through `GET /api/admin/provider-nodes` and revoke a node through `DELETE /api/admin/provider-nodes`. Revocation causes the control plane to reject subsequent heartbeats. This registry is not yet connected to inference scheduling, so registering a node does not make it selectable by end users.
+An administrator can inspect node status through `GET /api/admin/provider-nodes` and revoke a node through `DELETE /api/admin/provider-nodes`. Revocation atomically blocks future heartbeat writes and new scheduler reservations. Only after the node is registered, approved, online and ready does its exact model appear in the user-facing selector. The initial scheduler does not retry a different node after a dispatch failure and is not yet a durable queue.
 
 ## Endpoints
 
