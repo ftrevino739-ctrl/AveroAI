@@ -31,13 +31,17 @@ The registry client uses Upstash's documented REST command format: a single JSON
 Run this in PowerShell on the administrator's own computer. It generates two independent 32-byte random values without installing software:
 
 ```powershell
-$bytes = New-Object byte[] 32
-[System.Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
-$env:AVEIRO_NODE_SECRET_ENCRYPTION_KEY = [Convert]::ToHexString($bytes).ToLowerInvariant()
+$rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
 
 $bytes = New-Object byte[] 32
-[System.Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
-$env:AVEIRO_ADMIN_TOKEN = [Convert]::ToHexString($bytes).ToLowerInvariant()
+$rng.GetBytes($bytes)
+$env:AVEIRO_NODE_SECRET_ENCRYPTION_KEY = [BitConverter]::ToString($bytes).Replace("-", "").ToLowerInvariant()
+
+$bytes = New-Object byte[] 32
+$rng.GetBytes($bytes)
+$env:AVEIRO_ADMIN_TOKEN = [BitConverter]::ToString($bytes).Replace("-", "").ToLowerInvariant()
+
+$rng.Dispose()
 
 "Encryption key: $env:AVEIRO_NODE_SECRET_ENCRYPTION_KEY"
 "Admin token: $env:AVEIRO_ADMIN_TOKEN"
