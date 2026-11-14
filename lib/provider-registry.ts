@@ -8,11 +8,29 @@ const HEARTBEAT_WINDOW_MS = 60_000;
 const HEARTBEAT_INTERVAL_MS = 30_000;
 const OFFLINE_AFTER_MS = 90_000;
 const RESERVATION_TTL_SECONDS = 240;
-const RESERVE_SLOT_SCRIPT = `local current = tonumber(redis.call('GET', KEYS[1]) or '0')
-local maximum = tonumber(ARGV[1])
+const RESERVE_SLOT_SCRIPT = `local raw = redis.call('GET', KEYS[1])
+if not raw then return -1 end
+local record = cjson.decode(raw)
+if record.revokedAt ~= cjson.null then return -2 end
+local now = tonumber(ARGV[2])
+if not record.lastHeartbeatAt or now - tonumber(record.lastHeartbeatAt) > 90000 then return -3 end
+if record.runtimeStatus ~= 'ready' then return -3 end
+local approved = false
+for _, value in ipairs(record.allowedModels or {}) do
+  if value == ARGV[1] then approved = true break end
+end
+if not approved then return -3 end
+local available = false
+for _, value in ipairs(record.availableModels or {}) do
+  if value == ARGV[1] then available = true break end
+end
+if not available then return -3 end
+local maximum = tonumber(record.maxConcurrent or 0)
+if maximum < 1 then return -3 end
+local current = tonumber(redis.call('GET', KEYS[2]) or '0')
 if current >= maximum then return 0 end
-local next = redis.call('INCR', KEYS[1])
-redis.call('EXPIRE', KEYS[1], ARGV[2])
+local next = redis.call('INCR', KEYS[2])
+redis.call('EXPIRE', KEYS[2], ARGV[3])
 return next`;
 const RELEASE_SLOT_SCRIPT = `local current = tonumber(redis.call('GET', KEYS[1]) or '0')
 if current <= 1 then return redis.call('DEL', KEYS[1]) end
@@ -126,7 +144,7 @@ function validateProviderEndpoint(value: string): string {
   } catch {
     throw new Error("endpointUrl must be a valid URL.");
   }
-  const hostname = url.hostname.toLowerCase().replace(/\\.$/, "");
+  const hostname = url.hostname.toLowerCase().replace(/\.$/, "");
   const localHttp = url.protocol === "http:" && process.env.NODE_ENV !== "production" &&
     (hostname === "localhost" || (isIP(hostname) === 4 && hostname.startsWith("127.")));
   if (
@@ -233,6 +251,8 @@ export async function listProviderNodes(): Promise<ProviderNodeSummary[]> {
 
 export async function getAvailableCommunityModels(): Promise<string[]> {
   const now = Date.now();
+  const approved = new Set(approvedModels());
+  if (!approved.size) return [];
   const records = await allProviderNodeRecords();
   return [...new Set(records
     .filter((record) =>
@@ -241,7 +261,8 @@ export async function getAvailableCommunityModels(): Promise<string[]> {
       now - record.lastHeartbeatAt <= OFFLINE_AFTER_MS &&
       record.runtimeStatus === "ready"
     )
-    .flatMap((record) => record.availableModels))].sort();
+    .flatMap((record) => record.availableModels)
+    .filter((modelId) => approved.has(modelId)))].sort();
 }
 
 export type ProviderNodeReservation = {
@@ -266,7 +287,11 @@ export async function reserveProviderNodeForModel(modelId: string): Promise<Prov
     )
     .sort((a, b) => a.activeJobs / a.maxConcurrent - b.activeJobs / b.maxConcurrent);
 
+  const approved = new Set(approvedModels());
+  if (!approved.has(modelId)) return null;
+
   for (const record of records) {
+    if (!record.allowedModels.includes(modelId)) continue;
     let secret: string;
     try {
       secret = decryptSecret(record.encryptedSecret);
@@ -274,10 +299,11 @@ export async function reserveProviderNodeForModel(modelId: string): Promise<Prov
       // Corrupt or undecryptable records must never become schedulable.
       continue;
     }
-    const key = `aveiro:provider-node:reservations:${record.nodeId}`;
+    const reservationKey = `aveiro:provider-node:reservations:${record.nodeId}`;
     const reserved = await redisCommand<number>([
-      "EVAL", RESERVE_SLOT_SCRIPT, "1", key,
-      String(record.maxConcurrent), String(RESERVATION_TTL_SECONDS)
+      "EVAL", RESERVE_SLOT_SCRIPT, "2",
+      nodeKey(record.nodeId), reservationKey,
+      modelId, String(Date.now()), String(RESERVATION_TTL_SECONDS)
     ]);
     if (Number(reserved) < 1) continue;
 
@@ -374,6 +400,7 @@ export async function acceptProviderHeartbeat(
   ]);
   if (replay !== "OK") return { ok: false, status: 401, error: "Heartbeat nonce was already used." };
 
+  const currentlyApproved = new Set(approvedModels());
   const models = Array.isArray(data.models) ? data.models as unknown[] : null;
   const activeJobs = data.activeJobs;
   const maxConcurrent = data.maxConcurrent;
@@ -381,7 +408,8 @@ export async function acceptProviderHeartbeat(
   const runtimeStatus = data.runtimeStatus;
   if (
     !models || models.length > 8 ||
-    models.some((model) => typeof model !== "string" || !record.allowedModels.includes(model)) ||
+    models.some((model) => typeof model !== "string" ||
+      !record.allowedModels.includes(model) || !currentlyApproved.has(model)) ||
     !Number.isInteger(activeJobs) || (activeJobs as number) < 0 ||
     !Number.isInteger(maxConcurrent) || (maxConcurrent as number) < 1 || (maxConcurrent as number) > 32 ||
     (activeJobs as number) > (maxConcurrent as number) ||
