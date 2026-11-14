@@ -77,6 +77,7 @@ $env:AVEIRO_NODE_ID = "gpu-node-01"
 $env:AVEIRO_NODE_SECRET = (node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('hex'))")
 $env:AVEIRO_ALLOWED_MODELS = "community/approved-model"
 $env:LOCAL_INFERENCE_BASE_URL = "http://127.0.0.1:8000/v1"
+$env:AVEIRO_CONTROL_PLANE_URL = "https://aveiro.example"
 node provider-node/server.mjs
 ```
 
