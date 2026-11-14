@@ -2,6 +2,7 @@ import { createServer } from "node:http";
 import { isIP } from "node:net";
 import { pathToFileURL } from "node:url";
 import { verifyRequestSignature } from "./signing.mjs";
+import { startControlPlaneHeartbeat } from "./control-plane-heartbeat.mjs";
 
 const MAX_MESSAGES = 40;
 const MAX_MESSAGE_CHARS = 20_000;
@@ -82,6 +83,28 @@ function validateUpstreamBaseUrl(value) {
   return url;
 }
 
+function validateControlPlaneUrl(value) {
+  if (!value) return null;
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error("AVEIRO_CONTROL_PLANE_URL must be a valid URL.");
+  }
+  const localHttp = url.protocol === "http:" && isLoopbackHost(url.hostname);
+  if (
+    (url.protocol !== "https:" && !localHttp) ||
+    url.username ||
+    url.password ||
+    url.pathname !== "/" ||
+    url.search ||
+    url.hash
+  ) {
+    throw new Error("AVEIRO_CONTROL_PLANE_URL must be an HTTPS origin (HTTP loopback is allowed only for development).");
+  }
+  return url.origin;
+}
+
 function validateConfig(config) {
   if (!config || typeof config !== "object") {
     throw new Error("Provider-node configuration is required.");
@@ -102,10 +125,15 @@ function validateConfig(config) {
   }
 
   const upstreamBaseUrl = validateUpstreamBaseUrl(config.upstreamBaseUrl);
+  const controlPlaneUrl = validateControlPlaneUrl(config.controlPlaneUrl || "");
+  const heartbeatIntervalMs = Number(config.heartbeatIntervalMs ?? 30_000);
   const maxConcurrent = Number(config.maxConcurrent ?? 1);
   const requestTimeoutMs = Number(config.requestTimeoutMs ?? 120_000);
   const port = Number(config.port ?? 8787);
 
+  if (!Number.isInteger(heartbeatIntervalMs) || heartbeatIntervalMs < 10_000 || heartbeatIntervalMs > 120_000) {
+    throw new Error("AVEIRO_HEARTBEAT_INTERVAL_MS must be between 10000 and 120000.");
+  }
   if (!Number.isInteger(maxConcurrent) || maxConcurrent < 1 || maxConcurrent > 32) {
     throw new Error("AVEIRO_NODE_MAX_CONCURRENT must be an integer from 1 to 32.");
   }
@@ -121,6 +149,8 @@ function validateConfig(config) {
     secret: config.secret,
     allowedModels: config.allowedModels,
     upstreamBaseUrl,
+    controlPlaneUrl,
+    heartbeatIntervalMs,
     localApiKey: typeof config.localApiKey === "string" ? config.localApiKey : "",
     maxConcurrent,
     requestTimeoutMs,
@@ -142,6 +172,8 @@ export function loadConfig(env = process.env) {
     secret: env.AVEIRO_NODE_SECRET,
     allowedModels,
     upstreamBaseUrl: env.LOCAL_INFERENCE_BASE_URL || "http://127.0.0.1:8000/v1",
+    controlPlaneUrl: env.AVEIRO_CONTROL_PLANE_URL || "",
+    heartbeatIntervalMs: env.AVEIRO_HEARTBEAT_INTERVAL_MS || "30000",
     localApiKey: env.LOCAL_INFERENCE_API_KEY || "",
     maxConcurrent: env.AVEIRO_NODE_MAX_CONCURRENT || "1",
     requestTimeoutMs: env.AVEIRO_NODE_REQUEST_TIMEOUT_MS || "120000",
@@ -250,7 +282,7 @@ export function createProviderNodeServer(inputConfig) {
     return true;
   }
 
-  return createServer(async (req, res) => {
+  const server = createServer(async (req, res) => {
     const url = new URL(req.url || "/", "http://127.0.0.1");
 
     if (req.method === "GET" && url.pathname === "/healthz") {
@@ -388,6 +420,45 @@ export function createProviderNodeServer(inputConfig) {
       activeJobs = Math.max(0, activeJobs - 1);
     }
   });
+
+  // A readiness heartbeat is emitted only when the operator explicitly
+  // configures an Aveiro control-plane URL. It never contains prompts.
+  server.getControlPlaneSnapshot = async () => {
+    let models = [];
+    try {
+      const endpoint = new URL(
+        config.upstreamBaseUrl.pathname + "/models",
+        config.upstreamBaseUrl.origin
+      );
+      const headers = { Accept: "application/json" };
+      if (config.localApiKey) headers.Authorization = "Bearer " + config.localApiKey;
+      const response = await fetch(endpoint, {
+        headers,
+        redirect: "error",
+        signal: AbortSignal.timeout(5_000)
+      });
+      if (response.ok) {
+        const payload = await response.json();
+        const ids = new Set(
+          Array.isArray(payload.data)
+            ? payload.data.map((item) => item && typeof item.id === "string" ? item.id : "")
+            : []
+        );
+        models = [...config.allowedModels].filter((modelId) => ids.has(modelId));
+      }
+    } catch {
+      models = [];
+    }
+    return {
+      models,
+      activeJobs,
+      maxConcurrent: config.maxConcurrent,
+      runtime: "openai-compatible-http",
+      runtimeStatus: models.length > 0 ? "ready" : "unavailable"
+    };
+  };
+
+  return server;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
@@ -396,6 +467,18 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     const server = createProviderNodeServer(config);
     server.listen(config.port, "0.0.0.0", () => {
       process.stdout.write("Aveiro Provider Node listening on port " + config.port + "\n");
+      if (config.controlPlaneUrl) {
+        const heartbeat = startControlPlaneHeartbeat({
+          controlPlaneUrl: config.controlPlaneUrl,
+          nodeId: config.nodeId,
+          secret: config.secret,
+          intervalMs: config.heartbeatIntervalMs,
+          getSnapshot: () => server.getControlPlaneSnapshot(),
+          onError: () => process.stderr.write("Aveiro control-plane heartbeat failed; the node will retry.\n")
+        });
+        server.once("close", heartbeat.stop);
+        process.stdout.write("Aveiro control-plane heartbeat enabled.\n");
+      }
     });
   } catch (error) {
     process.stderr.write((error instanceof Error ? error.message : "Invalid configuration.") + "\n");
