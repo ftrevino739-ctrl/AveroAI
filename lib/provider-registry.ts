@@ -47,6 +47,8 @@ const SAVE_HEARTBEAT_SCRIPT = `local raw = redis.call('GET', KEYS[1])
 if not raw then return -1 end
 local record = cjson.decode(raw)
 if record.revokedAt ~= cjson.null then return -2 end
+local nonce = redis.call('SET', KEYS[2], '1', 'EX', '120', 'NX')
+if not nonce then return -3 end
 record.availableModels = cjson.decode(ARGV[1])
 record.activeJobs = tonumber(ARGV[2])
 record.maxConcurrent = tonumber(ARGV[3])
@@ -408,11 +410,6 @@ export async function acceptProviderHeartbeat(
     return { ok: false, status: 401, error: "Invalid heartbeat signature." };
   }
 
-  const replay = await redisCommand<string | null>([
-    "SET", `aveiro:provider-node:nonce:${nodeId}:${nonce}`, "1", "EX", "120", "NX"
-  ]);
-  if (replay !== "OK") return { ok: false, status: 401, error: "Heartbeat nonce was already used." };
-
   const currentlyApproved = new Set(approvedModels());
   const models = Array.isArray(data.models) ? data.models as unknown[] : null;
   const activeJobs = data.activeJobs;
@@ -435,7 +432,9 @@ export async function acceptProviderHeartbeat(
   const availableModels = [...new Set(models as string[])];
   const heartbeatAt = Date.now();
   const saved = await redisCommand<number>([
-    "EVAL", SAVE_HEARTBEAT_SCRIPT, "1", nodeKey(nodeId),
+    "EVAL", SAVE_HEARTBEAT_SCRIPT, "2",
+    nodeKey(nodeId),
+    `aveiro:provider-node:nonce:${nodeId}:${nonce}`,
     JSON.stringify(availableModels),
     String(activeJobs),
     String(maxConcurrent),
@@ -445,6 +444,7 @@ export async function acceptProviderHeartbeat(
   ]);
   if (Number(saved) === -1) return { ok: false, status: 404, error: "Provider node is not registered." };
   if (Number(saved) === -2) return { ok: false, status: 410, error: "Provider node credentials have been revoked." };
+  if (Number(saved) === -3) return { ok: false, status: 401, error: "Heartbeat nonce was already used." };
   if (Number(saved) !== 1) throw new Error("Provider heartbeat could not be committed.");
 
   return {
