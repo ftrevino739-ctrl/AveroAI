@@ -1,5 +1,6 @@
-import { models, type ProviderId } from "@/lib/models";
+import { models, type ProviderId, COMMUNITY_MODEL_PREFIX } from "@/lib/models";
 import { getCommunityNodeConfig } from "@/lib/community-node";
+import { getAvailableCommunityModels } from "@/lib/provider-registry";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -33,14 +34,32 @@ export async function GET() {
         name: node.modelName,
         provider: names.community,
         providerId: "community" as const,
-        description: "Open-weight model served by an Aveiro community node",
+        description: "Open-weight model served by a statically configured Aveiro node",
         category: "Open" as const,
         context: "Runtime dependent"
       };
     }
   } catch {
-    // A partial or invalid node configuration remains disabled and is never exposed to the browser.
+    // The legacy static adapter remains disabled when partially configured.
   }
+
+  let registeredModels: string[] = [];
+  try {
+    registeredModels = await getAvailableCommunityModels();
+    if (registeredModels.length) keys.community = true;
+  } catch {
+    // Registry storage is optional until the production control plane is configured.
+  }
+
+  const registeredCommunityModels = registeredModels.map((modelId) => ({
+    id: COMMUNITY_MODEL_PREFIX + modelId,
+    name: modelId,
+    provider: names.community,
+    providerId: "community" as const,
+    description: "Open-weight model on a live, approved Aveiro community node",
+    category: "Open" as const,
+    context: "Runtime dependent"
+  }));
 
   const catalogue = [
     ...models.filter((model) => keys[model.providerId]),
@@ -55,7 +74,8 @@ export async function GET() {
           context: "Provider defined"
         }]
       : []),
-    ...(communityModel ? [communityModel] : [])
+    ...(communityModel ? [communityModel] : []),
+    ...registeredCommunityModels
   ];
 
   const providers = (Object.keys(names) as ProviderId[]).map((id) => ({
