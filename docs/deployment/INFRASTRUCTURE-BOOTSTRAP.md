@@ -54,7 +54,7 @@ Copy these values directly into the hosting provider's private Environment Varia
 1. Sign in to Vercel and import the GitHub repository `ftrevino739-ctrl/AveroAI`.
 2. Set the project root directory to `/` (repository root) and let Vercel detect Next.js.
 3. Deploy the development branch `feature/aveiro-community-compute-foundation` as a preview/staging deployment. Do not merge the draft PR just to deploy it.
-4. In Project Settings → Environment Variables, add the following values for the Preview environment only. Do not copy these secrets into Production yet: use a separate production Redis database and separate encryption/admin secrets before creating a production deployment. The Upstash Free tier currently provides one database, so the same free database must not be shared between staging and production.
+4. In Project Settings → Environment Variables, add the following values for the Preview environment only. Do not copy these secrets into Production yet: create a separate production Redis database and separate encryption/admin secrets before creating a production deployment.
 
 | Variable | Value |
 | --- | --- |
@@ -67,7 +67,7 @@ Copy these values directly into the hosting provider's private Environment Varia
 
 5. Leave all AI provider API keys empty until Aveiro has its own authorized provider account and budget. The registry can be smoke-tested without an inference provider.
 6. Keep the Preview and Production environment variables separate. Create a distinct Upstash database and distinct encryption/admin secrets for Production; never point two environments at the same registry database.
-6. Redeploy after setting or changing environment variables.
+7. Redeploy after setting or changing environment variables.
 
 Vercel's Hobby plan is limited to personal, non-commercial use. It is appropriate only for private development/testing that meets those terms. Before Aveiro becomes a commercial/public product, choose a plan/host whose terms permit that use. Vercel lists Pro at $20 USD/month before applicable taxes and usage. Review the [Vercel pricing page](https://vercel.com/pricing) and [Hobby terms](https://vercel.com/legal/terms) before choosing. Do not silently treat a free personal plan as production hosting.
 
@@ -93,6 +93,15 @@ This bootstrap does not create or claim:
 - production SLA, independent security review or end-to-end prompt confidentiality.
 
 Do not add a provider node or set `AVEIRO_APPROVED_COMMUNITY_MODELS` until an exact checkpoint, model licence, commercial-use terms, runtime compatibility and the provider's privacy/security controls have been reviewed. A provider operator can technically inspect prompts processed on their node.
+
+## 7. Secret and environment operations
+
+- Keep `AVEIRO_APPROVED_COMMUNITY_MODELS` empty until a specific checkpoint and its exact licence, commercial-use conditions, acceptable-use terms, and serving profile have been reviewed.
+- Never reuse the Preview encryption key or admin token in Production. Generate independent values for every environment.
+- Keep an offline recovery copy of the encryption key in a password manager with restricted access. It protects stored provider HMAC secrets; losing it prevents decrypting those records.
+- Rotate the administrator bearer token after staff changes or suspected exposure. Revoke and re-enroll an affected provider node if its HMAC secret may have leaked.
+- Do not enable public provider enrollment. Node registration remains an administrator-only action and should be limited to invited providers until security review is complete.
+- Do not expose the Provider Node HTTP port publicly. Provider endpoints need HTTPS and network-level ingress restrictions so only the Aveiro control plane can reach them.
 
 ## 8. Dependency security gate
 
