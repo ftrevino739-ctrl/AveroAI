@@ -14,7 +14,7 @@ Aveiro.ai es una plataforma web multimodelo en desarrollo, con interfaz Liquid G
 - Prototipo de dispatch a un nodo remoto de Aveiro, autenticado con HMAC y sin API key del usuario.
 - Servicio independiente Provider Node con allowlist de modelos, límites, timeout y streaming.
 - Las credenciales del servidor no se exponen al navegador.
-- GitHub Actions comprueba tipos, lint, pruebas del nodo, compilación de producción y build Docker.
+- GitHub Actions comprueba dependencias de producción (npm audit, bloquea vulnerabilidades altas), tipos, lint, pruebas del nodo, compilación de producción y build Docker.
 
 ## Experiencia del usuario final: solo navegador
 
