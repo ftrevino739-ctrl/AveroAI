@@ -46,12 +46,14 @@ export async function POST(request: Request) {
   try {
     const body = await readBody(request);
     const label = typeof body.label === "string" ? body.label.trim() : "";
+    const baseUrl = typeof body.endpointUrl === "string" ? body.endpointUrl.trim() : "";
     const allowedModels = body.allowedModels;
-    if (!label || label.length > 80 || !Array.isArray(allowedModels)) {
-      return Response.json({ error: "Provide a node label and an allowedModels array." }, { status: 400 });
+    if (!label || label.length > 80 || !baseUrl || !Array.isArray(allowedModels)) {
+      return Response.json({ error: "Provide a node label, HTTPS endpointUrl and allowedModels array." }, { status: 400 });
     }
     const created = await createProviderNode({
       label,
+      baseUrl,
       allowedModels: allowedModels as string[]
     });
     return Response.json({
@@ -70,7 +72,7 @@ export async function POST(request: Request) {
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not create provider node.";
     const clientError = error instanceof AdminRequestError ||
-      /approved|Choose between|label|model IDs|requested model/i.test(message);
+      /approved|Choose between|label|endpointUrl|public HTTPS|model IDs|requested model/i.test(message);
     return Response.json({
       error: clientError ? message : "Provider node could not be created. Check server registry configuration."
     }, { status: clientError ? 400 : 503 });
