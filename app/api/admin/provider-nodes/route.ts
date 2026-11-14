@@ -4,19 +4,27 @@ import { createProviderNode, listProviderNodes, revokeProviderNode } from "@/lib
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+class AdminRequestError extends Error {}
+
 function authorized(request: Request): boolean {
   const expected = process.env.AVEIRO_ADMIN_TOKEN || "";
-  const supplied = (request.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
-  if (expected.length < 32 || !supplied) return false;
+  const match = /^Bearer\s+([^\s]+)$/i.exec(request.headers.get("authorization") || "");
+  if (expected.length < 32 || !match) return false;
   const a = Buffer.from(expected);
-  const b = Buffer.from(supplied);
+  const b = Buffer.from(match[1]);
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
 async function readBody(request: Request) {
   const raw = await request.text();
-  if (new TextEncoder().encode(raw).byteLength > 16_000) throw new Error("Request body is too large.");
-  return JSON.parse(raw) as Record<string, unknown>;
+  if (new TextEncoder().encode(raw).byteLength > 16_000) {
+    throw new AdminRequestError("Request body is too large.");
+  }
+  try {
+    return JSON.parse(raw) as Record<string, unknown>;
+  } catch {
+    throw new AdminRequestError("Request body must be valid JSON.");
+  }
 }
 
 export async function GET(request: Request) {
