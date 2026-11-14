@@ -56,6 +56,12 @@ Requiere Node.js 20.9 o superior. Para probar solo el chat existente, configura 
 
 No guardes claves reales en Git ni en variables del cliente como `NEXT_PUBLIC_*`. En producción, usa el panel privado de variables de entorno del hosting. El secreto HMAC debe ser único por nodo y nunca debe llegar al navegador.
 
+## Registro y disponibilidad de nodos comunitarios
+
+El control plane ya incluye un registro persistente y privado de proveedores, emisión de credenciales por el administrador, revocación y heartbeats HMAC. Usa Redis REST compatible con Upstash; los secretos HMAC se almacenan cifrados con AES-256-GCM. El Provider Node puede enviar un heartbeat cada 30 segundos y reporta únicamente los modelos exactos que el runtime anuncia en `GET /v1/models`. Un nodo se considera desconectado después de 90 segundos sin heartbeat.
+
+Configuración y endpoints: [Provider Registry and Heartbeat](docs/architecture/PROVIDER-REGISTRY-AND-HEARTBEAT.md). Esta primera etapa permite registrar y observar nodos; **todavía no enruta conversaciones automáticamente por el registro**. El chat conserva el adaptador estático de un nodo hasta completar el scheduler y sus pruebas.
+
 ## Provider Node comunitario (prototipo)
 
 El servicio está en `provider-node/`. El operador del nodo ejecuta el servicio junto a un runtime local compatible con OpenAI, como vLLM, SGLang o llama.cpp. El nodo solo acepta los IDs exactos configurados en `AVEIRO_ALLOWED_MODELS`, valida firmas HMAC con marca temporal y nonce, y envía los trabajos al runtime de loopback local.
@@ -64,7 +70,7 @@ La plataforma puede añadir al selector el modelo configurado en el servidor med
 
 Configuración, comandos y límites técnicos: [Provider Node README](provider-node/README.md). Protocolo: [Provider Node Protocol v1](docs/architecture/PROVIDER-NODE-PROTOCOL.md).
 
-**Límite actual:** solo existe el adaptador de un nodo configurado por variables de entorno. Todavía no hay alta automática de nodos, heartbeats, scheduler multi-nodo, cola distribuida, ledger de créditos, cancelación extremo a extremo ni verificación automática de licencias. La conexión remota requiere HTTPS y restricción de acceso de red; el Provider Node por sí solo no termina TLS. No habilites nodos comunitarios públicos o no confiables todavía.
+**Límite actual:** el registro y los heartbeats ya existen, pero el gateway de chat aún no los usa para seleccionar nodos. Todavía faltan el scheduler multi-nodo, cola distribuida, ledger de créditos, cancelación extremo a extremo y verificación automática de licencias. La conexión remota requiere HTTPS y restricción de acceso de red; el Provider Node por sí solo no termina TLS. No habilites nodos comunitarios públicos o no confiables todavía.
 
 ## Comandos
 
