@@ -17,6 +17,27 @@ return next`;
 const RELEASE_SLOT_SCRIPT = `local current = tonumber(redis.call('GET', KEYS[1]) or '0')
 if current <= 1 then return redis.call('DEL', KEYS[1]) end
 return redis.call('DECR', KEYS[1])`;
+const REVOKE_NODE_SCRIPT = `local raw = redis.call('GET', KEYS[1])
+if not raw then return 0 end
+local record = cjson.decode(raw)
+if record.revokedAt ~= cjson.null then return 1 end
+record.revokedAt = tonumber(ARGV[1])
+record.availableModels = {}
+record.runtimeStatus = 'unavailable'
+redis.call('SET', KEYS[1], cjson.encode(record))
+return 1`;
+const SAVE_HEARTBEAT_SCRIPT = `local raw = redis.call('GET', KEYS[1])
+if not raw then return -1 end
+local record = cjson.decode(raw)
+if record.revokedAt ~= cjson.null then return -2 end
+record.availableModels = cjson.decode(ARGV[1])
+record.activeJobs = tonumber(ARGV[2])
+record.maxConcurrent = tonumber(ARGV[3])
+record.runtime = ARGV[4]
+record.runtimeStatus = ARGV[5]
+record.lastHeartbeatAt = tonumber(ARGV[6])
+redis.call('SET', KEYS[1], cjson.encode(record))
+return 1`;
 
 type RedisReply<T> = { result?: T; error?: string };
 type NodeRecord = {
@@ -62,7 +83,8 @@ async function redisCommand<T>(command: Array<string | number>): Promise<T> {
       "Content-Type": "application/json"
     },
     body: JSON.stringify(command),
-    cache: "no-store"
+    cache: "no-store",
+    signal: AbortSignal.timeout(8_000)
   });
   if (!response.ok) throw new Error("Provider registry storage request failed.");
   const payload = await response.json() as RedisReply<T>;
@@ -245,6 +267,13 @@ export async function reserveProviderNodeForModel(modelId: string): Promise<Prov
     .sort((a, b) => a.activeJobs / a.maxConcurrent - b.activeJobs / b.maxConcurrent);
 
   for (const record of records) {
+    let secret: string;
+    try {
+      secret = decryptSecret(record.encryptedSecret);
+    } catch {
+      // Corrupt or undecryptable records must never become schedulable.
+      continue;
+    }
     const key = `aveiro:provider-node:reservations:${record.nodeId}`;
     const reserved = await redisCommand<number>([
       "EVAL", RESERVE_SLOT_SCRIPT, "1", key,
@@ -264,7 +293,7 @@ export async function reserveProviderNodeForModel(modelId: string): Promise<Prov
       label: record.label,
       baseUrl: record.baseUrl,
       modelId,
-      secret: decryptSecret(record.encryptedSecret),
+      secret,
       release
     };
   }
@@ -272,13 +301,10 @@ export async function reserveProviderNodeForModel(modelId: string): Promise<Prov
 }
 
 export async function revokeProviderNode(nodeId: string): Promise<boolean> {
-  const record = await readNode(nodeId);
-  if (!record) return false;
-  record.revokedAt = Date.now();
-  record.availableModels = [];
-  record.runtimeStatus = "unavailable";
-  await writeNode(record);
-  return true;
+  const result = await redisCommand<number>([
+    "EVAL", REVOKE_NODE_SCRIPT, "1", nodeKey(nodeId), String(Date.now())
+  ]);
+  return Number(result) === 1;
 }
 
 function verifySignature(input: {
@@ -365,12 +391,24 @@ export async function acceptProviderHeartbeat(
     return { ok: false, status: 400, error: "Heartbeat capabilities do not match the registered node policy." };
   }
 
-  record.availableModels = [...new Set(models as string[])];
-  record.activeJobs = activeJobs as number;
-  record.maxConcurrent = maxConcurrent as number;
-  record.runtime = runtime;
-  record.runtimeStatus = runtimeStatus as "ready" | "unavailable";
-  record.lastHeartbeatAt = Date.now();
-  await writeNode(record);
-  return { ok: true, ready: toSummary(record).ready };
+  const availableModels = [...new Set(models as string[])];
+  const heartbeatAt = Date.now();
+  const saved = await redisCommand<number>([
+    "EVAL", SAVE_HEARTBEAT_SCRIPT, "1", nodeKey(nodeId),
+    JSON.stringify(availableModels),
+    String(activeJobs),
+    String(maxConcurrent),
+    "openai-compatible-http",
+    String(runtimeStatus),
+    String(heartbeatAt)
+  ]);
+  if (Number(saved) === -1) return { ok: false, status: 404, error: "Provider node is not registered." };
+  if (Number(saved) === -2) return { ok: false, status: 410, error: "Provider node credentials have been revoked." };
+  if (Number(saved) !== 1) throw new Error("Provider heartbeat could not be committed.");
+
+  return {
+    ok: true,
+    ready: runtimeStatus === "ready" && availableModels.length > 0 &&
+      heartbeatAt <= Date.now() + OFFLINE_AFTER_MS
+  };
 }
