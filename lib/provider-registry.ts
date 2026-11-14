@@ -1,4 +1,5 @@
 import { createCipheriv, createDecipheriv, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { isIP } from "node:net";
 
 const NODE_KEY_PREFIX = "aveiro:provider-node:";
 const NODE_INDEX_KEY = "aveiro:provider-nodes";
@@ -6,11 +7,22 @@ const HEARTBEAT_PATH = "/api/provider-nodes/heartbeat";
 const HEARTBEAT_WINDOW_MS = 60_000;
 const HEARTBEAT_INTERVAL_MS = 30_000;
 const OFFLINE_AFTER_MS = 90_000;
+const RESERVATION_TTL_SECONDS = 240;
+const RESERVE_SLOT_SCRIPT = `local current = tonumber(redis.call('GET', KEYS[1]) or '0')
+local maximum = tonumber(ARGV[1])
+if current >= maximum then return 0 end
+local next = redis.call('INCR', KEYS[1])
+redis.call('EXPIRE', KEYS[1], ARGV[2])
+return next`;
+const RELEASE_SLOT_SCRIPT = `local current = tonumber(redis.call('GET', KEYS[1]) or '0')
+if current <= 1 then return redis.call('DEL', KEYS[1]) end
+return redis.call('DECR', KEYS[1])`;
 
 type RedisReply<T> = { result?: T; error?: string };
 type NodeRecord = {
   nodeId: string;
   label: string;
+  baseUrl: string;
   allowedModels: string[];
   encryptedSecret: string;
   createdAt: number;
@@ -85,6 +97,32 @@ function decryptSecret(value: string): string {
   ]).toString("utf8");
 }
 
+function validateProviderEndpoint(value: string): string {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error("endpointUrl must be a valid URL.");
+  }
+  const hostname = url.hostname.toLowerCase().replace(/\\.$/, "");
+  const localHttp = url.protocol === "http:" && process.env.NODE_ENV !== "production" &&
+    (hostname === "localhost" || (isIP(hostname) === 4 && hostname.startsWith("127.")));
+  if (
+    (url.protocol !== "https:" && !localHttp) ||
+    url.username ||
+    url.password ||
+    url.pathname !== "/" ||
+    url.search ||
+    url.hash ||
+    (!localHttp && (!hostname.includes(".") || isIP(hostname) !== 0 ||
+      hostname === "localhost" || hostname.endsWith(".localhost") ||
+      hostname.endsWith(".local") || hostname.endsWith(".internal")))
+  ) {
+    throw new Error("endpointUrl must be a public HTTPS origin without credentials, path or query.");
+  }
+  return url.origin;
+}
+
 function approvedModels(): string[] {
   const values = (process.env.AVEIRO_APPROVED_COMMUNITY_MODELS || "")
     .split(",").map((value) => value.trim()).filter(Boolean);
@@ -123,6 +161,7 @@ function toSummary(record: NodeRecord, now = Date.now()): ProviderNodeSummary {
 
 export async function createProviderNode(input: {
   label: string;
+  baseUrl: string;
   allowedModels: string[];
 }): Promise<{ node: ProviderNodeSummary; secret: string }> {
   const approved = approvedModels();
@@ -136,11 +175,13 @@ export async function createProviderNode(input: {
   if (allowedModels.some((id) => !approved.includes(id))) {
     throw new Error("A requested model is not in AVEIRO_APPROVED_COMMUNITY_MODELS.");
   }
+  const baseUrl = validateProviderEndpoint(input.baseUrl);
   const nodeId = "avn_" + randomBytes(10).toString("hex");
   const secret = randomBytes(32).toString("hex");
   const record: NodeRecord = {
     nodeId,
     label: input.label.trim().slice(0, 80),
+    baseUrl,
     allowedModels,
     encryptedSecret: encryptSecret(secret),
     createdAt: Date.now(),
@@ -156,12 +197,78 @@ export async function createProviderNode(input: {
   return { node: toSummary(record), secret };
 }
 
-export async function listProviderNodes(): Promise<ProviderNodeSummary[]> {
+async function allProviderNodeRecords(): Promise<NodeRecord[]> {
   const ids = await redisCommand<string[]>(["SMEMBERS", NODE_INDEX_KEY]);
   const records = await Promise.all((ids || []).map((id) => readNode(id)));
-  return records.filter((record): record is NodeRecord => Boolean(record))
+  return records.filter((record): record is NodeRecord => Boolean(record));
+}
+
+export async function listProviderNodes(): Promise<ProviderNodeSummary[]> {
+  return (await allProviderNodeRecords())
     .map((record) => toSummary(record))
     .sort((a, b) => b.createdAt - a.createdAt);
+}
+
+export async function getAvailableCommunityModels(): Promise<string[]> {
+  const now = Date.now();
+  const records = await allProviderNodeRecords();
+  return [...new Set(records
+    .filter((record) =>
+      !record.revokedAt &&
+      record.lastHeartbeatAt !== null &&
+      now - record.lastHeartbeatAt <= OFFLINE_AFTER_MS &&
+      record.runtimeStatus === "ready"
+    )
+    .flatMap((record) => record.availableModels))].sort();
+}
+
+export type ProviderNodeReservation = {
+  nodeId: string;
+  label: string;
+  baseUrl: string;
+  modelId: string;
+  secret: string;
+  release: () => Promise<void>;
+};
+
+export async function reserveProviderNodeForModel(modelId: string): Promise<ProviderNodeReservation | null> {
+  const now = Date.now();
+  const records = (await allProviderNodeRecords())
+    .filter((record) =>
+      !record.revokedAt &&
+      record.baseUrl &&
+      record.lastHeartbeatAt !== null &&
+      now - record.lastHeartbeatAt <= OFFLINE_AFTER_MS &&
+      record.runtimeStatus === "ready" &&
+      record.availableModels.includes(modelId)
+    )
+    .sort((a, b) => a.activeJobs / a.maxConcurrent - b.activeJobs / b.maxConcurrent);
+
+  for (const record of records) {
+    const key = `aveiro:provider-node:reservations:${record.nodeId}`;
+    const reserved = await redisCommand<number>([
+      "EVAL", RESERVE_SLOT_SCRIPT, "1", key,
+      String(record.maxConcurrent), String(RESERVATION_TTL_SECONDS)
+    ]);
+    if (Number(reserved) < 1) continue;
+
+    let released = false;
+    const release = async () => {
+      if (released) return;
+      released = true;
+      await redisCommand<number>(["EVAL", RELEASE_SLOT_SCRIPT, "1", key]).catch(() => 0);
+    };
+
+    return {
+      nodeId: record.nodeId,
+      label: record.label,
+      baseUrl: record.baseUrl,
+      modelId,
+      secret: decryptSecret(record.encryptedSecret),
+      release
+    };
+  }
+  return null;
 }
 
 export async function revokeProviderNode(nodeId: string): Promise<boolean> {
