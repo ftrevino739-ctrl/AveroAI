@@ -58,9 +58,9 @@ No guardes claves reales en Git ni en variables del cliente como `NEXT_PUBLIC_*`
 
 ## Registro y disponibilidad de nodos comunitarios
 
-El control plane ya incluye un registro persistente y privado de proveedores, emisión de credenciales por el administrador, revocación y heartbeats HMAC. Usa Redis REST compatible con Upstash; los secretos HMAC se almacenan cifrados con AES-256-GCM. El Provider Node puede enviar un heartbeat cada 30 segundos y reporta únicamente los modelos exactos que el runtime anuncia en `GET /v1/models`. Un nodo se considera desconectado después de 90 segundos sin heartbeat.
+El control plane ya incluye un registro persistente y privado de proveedores, emisión de credenciales por el administrador, revocación y heartbeats HMAC. Usa Redis REST compatible con Upstash; los secretos HMAC se almacenan cifrados con AES-256-GCM. El Provider Node envía heartbeats cada 30 segundos y reporta solo los modelos exactos que su runtime anuncia en `GET /v1/models`. Un nodo se considera desconectado después de 90 segundos sin heartbeat. El selector publica modelos solo cuando están aprobados y hay un nodo listo; el gateway reserva capacidad y despacha al nodo remoto que sirve el ID exacto.
 
-Configuración y endpoints: [Provider Registry and Heartbeat](docs/architecture/PROVIDER-REGISTRY-AND-HEARTBEAT.md). Esta primera etapa permite registrar y observar nodos; **todavía no enruta conversaciones automáticamente por el registro**. El chat conserva el adaptador estático de un nodo hasta completar el scheduler y sus pruebas.
+Configuración y endpoints: [Provider Registry and Heartbeat](docs/architecture/PROVIDER-REGISTRY-AND-HEARTBEAT.md). El scheduler inicial ya puede enrutar las conversaciones a nodos registrados y listos, con reservas atómicas de concurrencia en Redis. Si no hay capacidad para el modelo exacto, devuelve indisponibilidad y no hace fallback a otro modelo. Este scheduler aún no tiene cola distribuida, reintentos entre nodos ni medición de créditos; no se ha probado contra una base Redis real ni contra una GPU real.
 
 ## Provider Node comunitario (prototipo)
 
@@ -70,7 +70,7 @@ La plataforma puede añadir al selector el modelo configurado en el servidor med
 
 Configuración, comandos y límites técnicos: [Provider Node README](provider-node/README.md). Protocolo: [Provider Node Protocol v1](docs/architecture/PROVIDER-NODE-PROTOCOL.md).
 
-**Límite actual:** el registro y los heartbeats ya existen, pero el gateway de chat aún no los usa para seleccionar nodos. Todavía faltan el scheduler multi-nodo, cola distribuida, ledger de créditos, cancelación extremo a extremo y verificación automática de licencias. La conexión remota requiere HTTPS y restricción de acceso de red; el Provider Node por sí solo no termina TLS. No habilites nodos comunitarios públicos o no confiables todavía.
+**Límite actual:** el registro y el scheduler multi-nodo inicial ya existen, pero faltan pruebas con Redis y GPU reales, cola distribuida, reintentos controlados, ledger de créditos, autenticación de usuarios, cuotas persistentes y revisión de seguridad. La conexión remota requiere HTTPS y restricción de acceso de red; el Provider Node por sí solo no termina TLS. No habilites nodos comunitarios públicos o no confiables todavía.
 
 ## Comandos
 
