@@ -311,7 +311,7 @@ export async function reserveProviderNodeForModel(modelId: string): Promise<Prov
     const release = async () => {
       if (released) return;
       released = true;
-      await redisCommand<number>(["EVAL", RELEASE_SLOT_SCRIPT, "1", key]).catch(() => 0);
+      await redisCommand<number>(["EVAL", RELEASE_SLOT_SCRIPT, "1", reservationKey]).catch(() => 0);
     };
 
     return {
