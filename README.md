@@ -53,10 +53,20 @@ Requiere Node.js 20.9 o superior. Para probar solo el chat existente, configura 
 | `AVEIRO_NODE_SECRET` | Secreto HMAC compartido entre el servidor de Aveiro y ese nodo |
 | `AVEIRO_COMMUNITY_MODEL_ID` | ID exacto del modelo que el nodo tiene autorizado |
 | `AVEIRO_COMMUNITY_MODEL_NAME` | Nombre que aparece en el selector |
+| `AVEIRO_REDIS_REST_URL` | Endpoint HTTPS de Upstash Redis REST, solo servidor |
+| `AVEIRO_REDIS_REST_TOKEN` | Token de Upstash, solo servidor |
+| `AVEIRO_NODE_SECRET_ENCRYPTION_KEY` | Clave de 32 bytes (64 hex) para cifrar secretos HMAC en Redis |
+| `AVEIRO_ADMIN_TOKEN` | Token Bearer privado para administrar nodos |
+| `AVEIRO_APPROVED_COMMUNITY_MODELS` | Lista de IDs exactos aprobados tras revisión de licencia |
+
+Variables exclusivas del proceso Provider Node (máquina remota del operador, nunca del usuario final): `AVEIRO_CONTROL_PLANE_URL` y `AVEIRO_HEARTBEAT_INTERVAL_MS`. No configures estas dos en el proyecto web.
+
 
 No guardes claves reales en Git ni en variables del cliente como `NEXT_PUBLIC_*`. En producción, usa el panel privado de variables de entorno del hosting. El secreto HMAC debe ser único por nodo y nunca debe llegar al navegador.
 
 ## Registro y disponibilidad de nodos comunitarios
+
+La configuración de hosting y el proceso de primera publicación están en [Infrastructure Bootstrap](docs/deployment/INFRASTRUCTURE-BOOTSTRAP.md). El servicio incluye `GET /api/health` para liveness y `GET /api/ready` para comprobar secrets y conectividad real con Redis.
 
 El control plane ya incluye un registro persistente y privado de proveedores, emisión de credenciales por el administrador, revocación y heartbeats HMAC. Usa Redis REST compatible con Upstash; los secretos HMAC se almacenan cifrados con AES-256-GCM. El Provider Node envía heartbeats cada 30 segundos y reporta solo los modelos exactos que su runtime anuncia en `GET /v1/models`. Un nodo se considera desconectado después de 90 segundos sin heartbeat. El selector publica modelos solo cuando están aprobados y hay un nodo listo; el gateway reserva capacidad y despacha al nodo remoto que sirve el ID exacto.
 
