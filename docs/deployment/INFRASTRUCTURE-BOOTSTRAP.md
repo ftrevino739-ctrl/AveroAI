@@ -26,6 +26,8 @@ The current Upstash Free plan is intended for prototypes and includes 256 MB dat
 
 The registry client uses Upstash's documented REST command format: a single JSON array in the POST request body, including Redis commands such as `PING`, `GET`, `SET`, `SMEMBERS` and `EVAL`. See the [Upstash REST API guide](https://upstash.com/docs/redis/features/restapi).
 
+A provider heartbeat currently uses two Redis commands: one `GET` to load the registered node and verify its HMAC secret, then one Lua `EVAL` that atomically checks replay nonce, revocation state and writes the new heartbeat. At a 30-second interval, one continuously online node uses approximately 172,800 Redis commands over 30 days for heartbeats alone. Model catalogue reads and inference reservations add more. This is why the Free tier is suitable for controlled staging only; monitor actual usage before inviting multiple always-on nodes.
+
 ## 3. Generate private secrets on Windows
 
 Run this in PowerShell on the administrator's own computer. It generates two independent 32-byte random values without installing software:
