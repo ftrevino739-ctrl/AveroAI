@@ -35,8 +35,13 @@ async function readBody(request: Request) {
     reader.releaseLock();
   }
   try {
-    return JSON.parse(Buffer.concat(chunks).toString("utf8")) as Record<string, unknown>;
-  } catch {
+    const value: unknown = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      throw new AdminRequestError("Request body must be a JSON object.");
+    }
+    return value as Record<string, unknown>;
+  } catch (error) {
+    if (error instanceof AdminRequestError) throw error;
     throw new AdminRequestError("Request body must be valid JSON.");
   }
 }
@@ -105,7 +110,10 @@ export async function DELETE(request: Request) {
     return revoked
       ? Response.json({ revoked: true, nodeId }, { headers: { "Cache-Control": "no-store" } })
       : Response.json({ error: "Provider node not found." }, { status: 404 });
-  } catch {
+  } catch (error) {
+    if (error instanceof AdminRequestError) {
+      return Response.json({ error: error.message }, { status: 400 });
+    }
     return Response.json({ error: "Provider registry storage is unavailable or misconfigured." }, { status: 503 });
   }
 }
