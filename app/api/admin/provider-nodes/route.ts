@@ -1,0 +1,83 @@
+import { timingSafeEqual } from "node:crypto";
+import { createProviderNode, listProviderNodes, revokeProviderNode } from "@/lib/provider-registry";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+function authorized(request: Request): boolean {
+  const expected = process.env.AVEIRO_ADMIN_TOKEN || "";
+  const supplied = (request.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
+  if (expected.length < 32 || !supplied) return false;
+  const a = Buffer.from(expected);
+  const b = Buffer.from(supplied);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+async function readBody(request: Request) {
+  const raw = await request.text();
+  if (new TextEncoder().encode(raw).byteLength > 16_000) throw new Error("Request body is too large.");
+  return JSON.parse(raw) as Record<string, unknown>;
+}
+
+export async function GET(request: Request) {
+  if (!authorized(request)) return Response.json({ error: "Unauthorized." }, { status: 401 });
+  try {
+    return Response.json({ nodes: await listProviderNodes() }, {
+      headers: { "Cache-Control": "no-store" }
+    });
+  } catch {
+    return Response.json({ error: "Provider registry storage is unavailable or misconfigured." }, { status: 503 });
+  }
+}
+
+export async function POST(request: Request) {
+  if (!authorized(request)) return Response.json({ error: "Unauthorized." }, { status: 401 });
+  try {
+    const body = await readBody(request);
+    const label = typeof body.label === "string" ? body.label.trim() : "";
+    const allowedModels = body.allowedModels;
+    if (!label || label.length > 80 || !Array.isArray(allowedModels)) {
+      return Response.json({ error: "Provide a node label and an allowedModels array." }, { status: 400 });
+    }
+    const created = await createProviderNode({
+      label,
+      allowedModels: allowedModels as string[]
+    });
+    return Response.json({
+      node: created.node,
+      secret: created.secret,
+      secretShownOnce: true,
+      setup: {
+        AVEIRO_NODE_ID: created.node.nodeId,
+        AVEIRO_NODE_SECRET: created.secret,
+        AVEIRO_ALLOWED_MODELS: created.node.allowedModels.join(",")
+      }
+    }, {
+      status: 201,
+      headers: { "Cache-Control": "no-store" }
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Could not create provider node.";
+    const clientError = /approved|Choose between|label|model IDs|requested model/i.test(message);
+    return Response.json({
+      error: clientError ? message : "Provider node could not be created. Check server registry configuration."
+    }, { status: clientError ? 400 : 503 });
+  }
+}
+
+export async function DELETE(request: Request) {
+  if (!authorized(request)) return Response.json({ error: "Unauthorized." }, { status: 401 });
+  try {
+    const body = await readBody(request);
+    const nodeId = typeof body.nodeId === "string" ? body.nodeId : "";
+    if (!/^avn_[a-f0-9]{20}$/.test(nodeId)) {
+      return Response.json({ error: "A valid nodeId is required." }, { status: 400 });
+    }
+    const revoked = await revokeProviderNode(nodeId);
+    return revoked
+      ? Response.json({ revoked: true, nodeId }, { headers: { "Cache-Control": "no-store" } })
+      : Response.json({ error: "Provider node not found." }, { status: 404 });
+  } catch {
+    return Response.json({ error: "Provider registry storage is unavailable or misconfigured." }, { status: 503 });
+  }
+}
