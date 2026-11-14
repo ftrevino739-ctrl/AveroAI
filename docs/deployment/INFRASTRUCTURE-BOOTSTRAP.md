@@ -93,7 +93,13 @@ This bootstrap does not create or claim:
 
 Do not add a provider node or set `AVEIRO_APPROVED_COMMUNITY_MODELS` until an exact checkpoint, model licence, commercial-use terms, runtime compatibility and the provider's privacy/security controls have been reviewed. A provider operator can technically inspect prompts processed on their node.
 
-## 7. Upgrade path
+## 7. Dependency security gate
+
+The build pins the Next.js 15.5 line to `15.5.29` and keeps the compatible React release at `19.1.10`. The dependency tree previously included PostCSS `<=8.5.22` transitively through Next.js; this falls inside published PostCSS advisories. The project now forces the compatible patched PostCSS `8.5.32` through npm `overrides`. The GitHub Actions workflow runs `npm audit --omit=dev --audit-level=high` before type checking and blocks deployment-quality CI if a high-severity production dependency advisory remains. Review the [PostCSS security advisory](https://github.com/postcss/postcss/security/advisories/GHSA-fxqj-rqcc-2cmp) and keep this override under review as Next.js updates.
+
+The audit step covers production dependencies only. Development-tool advisories may still appear in the full `npm install` summary and should be reviewed separately; they do not get silently treated as fixed by this gate.
+
+## 8. Upgrade path
 
 For a private prototype, Vercel Preview + one Upstash Free database is sufficient to validate web deployment and Redis connectivity. Before inviting external users, review the hosting terms, upgrade to commercial-capable compute/storage as needed, establish spend alerts and rate limits, configure a production domain, and complete account security, authentication, retention, abuse and privacy work.
 
