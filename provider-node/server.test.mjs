@@ -30,6 +30,11 @@ async function fixture(t) {
   let receivedJob = null;
 
   const upstream = createServer(async (req, res) => {
+    if (req.method === "GET" && req.url === "/v1/models") {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ data: [{ id: "community/test-model" }, { id: "unapproved/model" }] }));
+      return;
+    }
     upstreamCalls += 1;
     const chunks = [];
     for await (const chunk of req) chunks.push(chunk);
@@ -93,6 +98,7 @@ async function fixture(t) {
 
   return {
     baseUrl,
+    node,
     signedHeaders,
     signedRequest,
     get upstreamCalls() { return upstreamCalls; },
@@ -193,4 +199,16 @@ test("streams an approved model response from the local inference runtime", asyn
     stream: true
   });
   assert.equal(f.upstreamCalls, 1);
+});
+
+test("reports only approved models actually advertised by the inference runtime", async (t) => {
+  const f = await fixture(t);
+  const snapshot = await f.node.getControlPlaneSnapshot();
+  assert.deepEqual(snapshot, {
+    models: ["community/test-model"],
+    activeJobs: 0,
+    maxConcurrent: 2,
+    runtime: "openai-compatible-http",
+    runtimeStatus: "ready"
+  });
 });
