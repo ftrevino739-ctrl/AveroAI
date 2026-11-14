@@ -34,6 +34,17 @@ The provider runs this service on its GPU machine. Aveiro end users do **not** i
 
 ## Configuration
 
+The operator-only template is [`.env.example`](./.env.example). It is separate from the web application's root `.env.example`. On Windows PowerShell, copy it to a private, gitignored `.env` file and edit it with the node credentials issued once by the Aveiro administrator:
+
+```powershell
+Copy-Item provider-node/.env.example provider-node/.env
+notepad provider-node/.env
+node --env-file=provider-node/.env provider-node/server.mjs
+```
+
+Node.js 22 supports `--env-file`; no dotenv package is required. Do not commit `provider-node/.env` or share its contents. The same rule applies to environment files on Linux/macOS. This setup is performed only by an invited remote provider operator, not by an Aveiro end user.
+
+
 Required environment variables:
 
 | Variable | Meaning |
