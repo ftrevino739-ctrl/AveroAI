@@ -54,7 +54,7 @@ Copy these values directly into the hosting provider's private Environment Varia
 1. Sign in to Vercel and import the GitHub repository `ftrevino739-ctrl/AveroAI`.
 2. Set the project root directory to `/` (repository root) and let Vercel detect Next.js.
 3. Deploy the development branch `feature/aveiro-community-compute-foundation` as a preview/staging deployment. Do not merge the draft PR just to deploy it.
-4. In Project Settings → Environment Variables, add the following values for the Preview environment:
+4. In Project Settings → Environment Variables, add the following values for the Preview environment only. Do not copy these secrets into Production yet: use a separate production Redis database and separate encryption/admin secrets before creating a production deployment. The Upstash Free tier currently provides one database, so the same free database must not be shared between staging and production.
 
 | Variable | Value |
 | --- | --- |
