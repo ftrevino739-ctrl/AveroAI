@@ -62,6 +62,14 @@ El control plane ya incluye un registro persistente y privado de proveedores, em
 
 Configuración y endpoints: [Provider Registry and Heartbeat](docs/architecture/PROVIDER-REGISTRY-AND-HEARTBEAT.md). El scheduler inicial ya puede enrutar las conversaciones a nodos registrados y listos, con reservas atómicas de concurrencia en Redis. Si no hay capacidad para el modelo exacto, devuelve indisponibilidad y no hace fallback a otro modelo. Este scheduler aún no tiene cola distribuida, reintentos entre nodos ni medición de créditos; no se ha probado contra una base Redis real ni contra una GPU real.
 
+## Infraestructura web y despliegue
+
+La primera ruta de staging preparada es **Vercel + Upstash Redis REST**. Incluye `vercel.json` con la región inicial `iad1`, duración máxima de 180 segundos para el gateway de chat, un endpoint público de liveness (`GET /api/health`) y un endpoint de readiness (`GET /api/ready`) que comprueba la configuración privada y el `PING` real de Redis.
+
+Guía de creación de cuentas, configuración de secretos y verificación: [Infrastructure Bootstrap](docs/deployment/INFRASTRUCTURE-BOOTSTRAP.md). Ninguna cuenta, base Redis, dominio ni servicio se ha creado automáticamente: esos recursos pertenecen al administrador y se configuran desde los paneles oficiales. El Dockerfile existente se conserva para desplegar en otros proveedores de contenedores.
+
+**Importante:** Vercel Hobby solo permite uso personal/no comercial. Antes de convertir Aveiro en un servicio comercial o público, hay que elegir un plan/host que autorice ese uso y definir presupuesto operativo. Upstash Free es para prototipos y tiene límites mensuales; no debe tratarse como infraestructura ilimitada.
+
 ## Provider Node comunitario (prototipo)
 
 El servicio está en `provider-node/`. El operador del nodo ejecuta el servicio junto a un runtime local compatible con OpenAI, como vLLM, SGLang o llama.cpp. El nodo solo acepta los IDs exactos configurados en `AVEIRO_ALLOWED_MODELS`, valida firmas HMAC con marca temporal y nonce, y envía los trabajos al runtime de loopback local.
@@ -96,6 +104,7 @@ Si el modelo elegido no está disponible, Aveiro debe informar la indisponibilid
 - `app/page.tsx`: interfaz y estado de conversaciones.
 - `app/api/chat/route.ts`: gateway server-side, dispatch al nodo comunitario y streaming.
 - `app/api/providers/route.ts`: catálogo de proveedores configurados.
+- `app/api/health/route.ts` y `app/api/ready/route.ts`: liveness y readiness de infraestructura.
 - `lib/models.ts`: modelos y tipos de proveedor.
 - `lib/community-node.ts`: configuración server-side y firma de solicitudes del nodo.
 - `provider-node/`: servicio independiente para nodos de GPU.
