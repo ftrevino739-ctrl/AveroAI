@@ -59,7 +59,7 @@ Requiere Node.js 20.9 o superior. Para probar solo el chat existente, configura 
 | `AVEIRO_ADMIN_TOKEN` | Token Bearer privado para administrar nodos |
 | `AVEIRO_APPROVED_COMMUNITY_MODELS` | Lista de IDs exactos aprobados tras revisión de licencia |
 
-Variables exclusivas del proceso Provider Node (máquina remota del operador, nunca del usuario final): `AVEIRO_CONTROL_PLANE_URL` y `AVEIRO_HEARTBEAT_INTERVAL_MS`. No configures estas dos en el proyecto web.
+Todos los valores del proceso Provider Node se configuran por separado en `provider-node/.env.example` (plantilla); nunca los necesita un usuario final ni deben copiarse al proyecto web. `AVEIRO_NODE_ID` y `AVEIRO_NODE_SECRET` aparecen arriba solo para compatibilidad con el adaptador estático antiguo.
 
 
 No guardes claves reales en Git ni en variables del cliente como `NEXT_PUBLIC_*`. En producción, usa el panel privado de variables de entorno del hosting. El secreto HMAC debe ser único por nodo y nunca debe llegar al navegador.
