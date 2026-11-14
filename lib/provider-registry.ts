@@ -5,7 +5,6 @@ const NODE_KEY_PREFIX = "aveiro:provider-node:";
 const NODE_INDEX_KEY = "aveiro:provider-nodes";
 const HEARTBEAT_PATH = "/api/provider-nodes/heartbeat";
 const HEARTBEAT_WINDOW_MS = 60_000;
-const HEARTBEAT_INTERVAL_MS = 30_000;
 const OFFLINE_AFTER_MS = 90_000;
 const RESERVATION_TTL_SECONDS = 240;
 const RESERVE_SLOT_SCRIPT = `local raw = redis.call('GET', KEYS[1])
@@ -436,7 +435,6 @@ export async function acceptProviderHeartbeat(
 
   return {
     ok: true,
-    ready: runtimeStatus === "ready" && availableModels.length > 0 &&
-      heartbeatAt <= Date.now() + OFFLINE_AFTER_MS
+    ready: runtimeStatus === "ready" && availableModels.length > 0
   };
 }
