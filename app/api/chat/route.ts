@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { NextRequest } from "next/server";
-import { models, type ProviderId } from "@/lib/models";
+import { models, type ProviderId, COMMUNITY_MODEL_PREFIX } from "@/lib/models";
+import { reserveProviderNodeForModel, type ProviderNodeReservation } from "@/lib/provider-registry";
 import type { CommunityNodeConfig } from "@/lib/community-node";
 import {
   communityNodeEndpoint,
@@ -72,6 +73,9 @@ export async function POST(request: NextRequest) {
   if (!body || typeof body !== "object") return error("Solicitud no válida.", 400);
   const data = body as { model?: unknown; messages?: unknown };
   const modelId = typeof data.model === "string" ? data.model : "";
+  const dynamicCommunityModelId = modelId.startsWith(COMMUNITY_MODEL_PREFIX)
+    ? modelId.slice(COMMUNITY_MODEL_PREFIX.length)
+    : null;
 
   let communityConfig: CommunityNodeConfig | null = null;
   let communityConfigInvalid = false;
@@ -84,17 +88,27 @@ export async function POST(request: NextRequest) {
     return error("La configuración del nodo comunitario del servidor es inválida.", 503);
   }
 
-  const communityModel = communityConfig && modelId === communityConfig.modelId
+  const communityModel = dynamicCommunityModelId
     ? {
-        id: communityConfig.modelId,
-        name: communityConfig.modelName,
+        id: dynamicCommunityModelId,
+        name: dynamicCommunityModelId,
         provider: "Aveiro Community Compute",
         providerId: "community" as const,
-        description: "Open-weight model served by an Aveiro community node",
+        description: "Open-weight model served by a live registered Aveiro node",
         category: "Open" as const,
         context: "Runtime dependent"
       }
-    : undefined;
+    : communityConfig && modelId === communityConfig.modelId
+      ? {
+          id: communityConfig.modelId,
+          name: communityConfig.modelName,
+          provider: "Aveiro Community Compute",
+          providerId: "community" as const,
+          description: "Open-weight model served by a statically configured Aveiro node",
+          category: "Open" as const,
+          context: "Runtime dependent"
+        }
+      : undefined;
 
   const customModel = process.env.CUSTOM_MODEL_ID && modelId === process.env.CUSTOM_MODEL_ID
     ? {
@@ -134,7 +148,27 @@ export async function POST(request: NextRequest) {
   }
 
   const cleanMessages = messages.map(({ role, content }) => ({ role, content }));
-  if (!ready(model.providerId, Boolean(communityConfig))) {
+  let dynamicReservation: ProviderNodeReservation | null = null;
+  if (dynamicCommunityModelId) {
+    try {
+      dynamicReservation = await reserveProviderNodeForModel(dynamicCommunityModelId);
+    } catch {
+      return error("El registro de nodos comunitarios no está disponible.", 503);
+    }
+    if (!dynamicReservation) {
+      return error("No hay un nodo comunitario listo con capacidad para ese modelo. Inténtalo más tarde.", 503);
+    }
+  }
+
+  let reservationReleased = false;
+  const releaseReservation = async () => {
+    if (!dynamicReservation || reservationReleased) return;
+    reservationReleased = true;
+    await dynamicReservation.release();
+  };
+
+  if (!ready(model.providerId, Boolean(communityConfig || dynamicReservation))) {
+    await releaseReservation();
     return error(
       `Configura el acceso autorizado de ${model.provider} en las variables privadas del servidor.`,
       503
@@ -150,7 +184,19 @@ export async function POST(request: NextRequest) {
     let upstream: Response;
 
     if (model.providerId === "community") {
-      if (!communityConfig) return error("No hay un nodo comunitario configurado.", 503);
+      const activeCommunityConfig: CommunityNodeConfig | null = dynamicReservation
+        ? {
+            nodeId: dynamicReservation.nodeId,
+            secret: dynamicReservation.secret,
+            modelId: dynamicReservation.modelId,
+            modelName: dynamicReservation.modelId,
+            baseUrl: dynamicReservation.baseUrl
+          }
+        : communityConfig;
+      if (!activeCommunityConfig) {
+        await releaseReservation();
+        return error("No hay un nodo comunitario configurado o disponible.", 503);
+      }
       const path = "/v1/node/infer";
       const requestBody = JSON.stringify({
         requestId: randomUUID(),
@@ -158,13 +204,13 @@ export async function POST(request: NextRequest) {
         messages: cleanMessages
       });
       const signedHeaders = signCommunityNodeRequest(
-        communityConfig,
+        activeCommunityConfig,
         "POST",
         path,
         requestBody
       );
 
-      upstream = await fetch(communityNodeEndpoint(communityConfig, path), {
+      upstream = await fetch(communityNodeEndpoint(activeCommunityConfig, path), {
         method: "POST",
         signal,
         redirect: "error",
@@ -253,12 +299,16 @@ export async function POST(request: NextRequest) {
 
     if (!upstream.ok) {
       const detail = (await upstream.text()).slice(0, 700);
+      await releaseReservation();
       return error(
         `Error de ${model.provider} (${upstream.status}): ${detail}`,
         upstream.status >= 400 && upstream.status < 600 ? upstream.status : 502
       );
     }
-    if (!upstream.body) return error("El proveedor no devolvió un flujo de respuesta.", 502);
+    if (!upstream.body) {
+      await releaseReservation();
+      return error("El proveedor no devolvió un flujo de respuesta.", 502);
+    }
 
     const reader = upstream.body.getReader();
     const decoder = new TextDecoder();
@@ -297,10 +347,12 @@ export async function POST(request: NextRequest) {
           controller.error(new Error("La conexión con el proveedor se interrumpió."));
         } finally {
           reader.releaseLock();
+          await releaseReservation();
         }
       },
       cancel() {
         reader.cancel().catch(() => {});
+        void releaseReservation();
       }
     });
 
@@ -312,6 +364,7 @@ export async function POST(request: NextRequest) {
       }
     });
   } catch (err) {
+    await releaseReservation();
     if (err instanceof Error && err.name === "TimeoutError") {
       return error("El proveedor tardó demasiado en responder. Inténtalo de nuevo.", 504);
     }
