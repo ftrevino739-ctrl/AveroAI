@@ -85,8 +85,15 @@ function redisConfiguration() {
     throw new Error("Provider registry storage is not configured.");
   }
   const url = new URL(endpoint);
-  if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash) {
-    throw new Error("AVEIRO_REDIS_REST_URL must be an HTTPS URL without embedded credentials.");
+  if (
+    url.protocol !== "https:" ||
+    url.username ||
+    url.password ||
+    url.pathname !== "/" ||
+    url.search ||
+    url.hash
+  ) {
+    throw new Error("AVEIRO_REDIS_REST_URL must be an HTTPS origin without a path or embedded credentials.");
   }
   return { url: url.toString().replace(/\/$/, ""), token };
 }
@@ -102,10 +109,12 @@ async function redisCommand<T>(command: Array<string | number>): Promise<T> {
     method: "POST",
     headers: {
       Authorization: `Bearer ${config.token}`,
-      "Content-Type": "application/json"
+      "Content-Type": "application/json",
+      Accept: "application/json"
     },
     body: JSON.stringify(command),
     cache: "no-store",
+    redirect: "error",
     signal: AbortSignal.timeout(8_000)
   });
   if (!response.ok) throw new Error("Provider registry storage request failed.");
