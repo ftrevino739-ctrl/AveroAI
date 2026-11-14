@@ -119,16 +119,19 @@ The repository now contains a standalone first provider-node service in `provide
 - `server.test.mjs` uses a fake local runtime to test health, authentication, signature/body integrity, nonce replay, model allowlisting and streaming.
 - `npm run test:provider-node` is included in GitHub Actions CI.
 
-The Next.js server can now be configured with one trusted remote node through private environment variables. When all node settings are valid, the provider catalogue adds the configured model and the chat route signs and forwards requests to that node; end users do not provide an API key. This is a static single-node connection, not a public node marketplace or scheduler. The app reports that the node is configured, not that its GPU/model is live. It still does not register nodes dynamically, issue/revoke secrets, perform heartbeats, meter usage, or handle image/audio/video. Tests prove protocol behavior against a fake runtime and verify control-plane/node signature compatibility; they do not prove GPU availability, model quality, model licensing or production network security.
+The Next.js server can still be configured with one trusted remote node through private environment variables; that legacy path is static and is not the new registry. The repository now also includes an operator-only persistent provider registry backed by an Upstash-compatible Redis REST service, AES-256-GCM encryption for per-node HMAC secrets, administrator-controlled enrollment and revocation endpoints, and a signed outbound heartbeat. The Provider Node queries its local OpenAI-compatible `GET /v1/models` endpoint and reports only exact allowlisted models that the runtime actually advertises. The control plane verifies the HMAC signature, enforces a short timestamp window, stores heartbeat nonces with Redis `SET NX EX` to prevent replay across application instances, marks nodes offline after 90 seconds, and exposes sanitized records only through the private admin API.
+
+This is a real registration/readiness foundation, not yet the public node marketplace or scheduler. The existing chat route does **not** dispatch through this registry; dynamic registered nodes are not selectable by end users. The new registry requires separately configured Redis REST credentials, an encryption key, an admin token and a reviewed allowlist of exact community model IDs. No model should be approved until its exact checkpoint and licence have been reviewed. Heartbeat tests use fake control-plane/runtime servers; they do not prove real GPU availability, model quality, model licensing, production TLS or hosting configuration.
 
 ## 7. Next implementation gates
 
-1. Run the provider node against a real local OpenAI-compatible inference runtime and one exact license-reviewed open-weight checkpoint; the current catalogue entry is only a server-configured declaration.
-2. Add central node onboarding, server-side per-node secret generation/revocation, authenticated heartbeat and readiness checks so static environment configuration can be retired.
-3. Replace the single-node environment adapter with a registry and scheduler that dispatch only to registered, healthy and capacity-eligible nodes serving the exact selected model.
-4. Add end-to-end tests for dispatch, streaming cancellation, timeout, disconnection, capacity exhaustion and retry to another node serving the same exact model.
-5. Add durable usage metering and credits only after the gateway can measure accepted tokens/jobs consistently.
-6. Complete TLS ingress, authentication, quotas, abuse review and privacy disclosures before any public or untrusted node is admitted.
+1. Connect the chat gateway to the durable registry with a scheduler that selects only active, non-revoked, recently heartbeating nodes with the exact requested model and available concurrency.
+2. Add end-to-end tests for dispatch, streaming cancellation, timeout, node disconnect, capacity exhaustion and retry to another node serving the same exact model.
+3. Retire the legacy static single-node environment route only after scheduler behavior is verified and the migration has a rollback path.
+4. Add short-lived job authorization and stronger node ingress protections; HMAC control-plane authentication does not encrypt prompts or prevent a node operator from reading them.
+5. Add durable usage metering and credits only after the gateway can measure accepted input/output tokens and failed jobs consistently.
+6. Add a private admin dashboard, audit events, node health history, credential rotation and incident controls.
+7. Complete TLS, user authentication, quotas, abuse review, privacy disclosure and independent security review before any public or untrusted node is admitted.
 
 The platform must not silently substitute a proprietary paid model or a different model when a community model is unavailable. It must clearly report capacity unavailability.
 
