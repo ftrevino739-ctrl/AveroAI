@@ -14,7 +14,8 @@ This is the first executable provider-node prototype for Aveiro Community Comput
 
 ## What it does not do yet
 
-- It does not register itself with Aveiro, send heartbeats, or appear in a central scheduler.
+- Registration is provisioned by an Aveiro administrator; the node does not self-register or select its own approved models.
+- It sends signed availability heartbeats when `AVEIRO_CONTROL_PLANE_URL` is configured, but it is not yet selected by the chat scheduler.
 - It does not download, install, or select model weights.
 - It does not verify a model licence automatically. An operator must approve the exact checkpoint and terms before allowing it.
 - It does not provide TLS, user authentication, usage credits, billing, moderation, or a production abuse-control system.
@@ -50,6 +51,8 @@ Optional environment variables:
 | `AVEIRO_NODE_MAX_CONCURRENT` | `1` | Maximum concurrent inference jobs, from 1 to 32. |
 | `AVEIRO_NODE_REQUEST_TIMEOUT_MS` | `120000` | Per-job timeout, from 10,000 to 600,000 ms. |
 | `PORT` | `8787` | HTTP listen port. |
+| `AVEIRO_CONTROL_PLANE_URL` | empty | Aveiro HTTPS origin. When set, the node sends signed readiness heartbeats every 30 seconds. HTTP is allowed only for loopback development. |
+| `AVEIRO_HEARTBEAT_INTERVAL_MS` | `30000` | Heartbeat interval, from 10,000 to 120,000 ms.
 
 Generate a unique secret on Linux/macOS:
 
@@ -79,6 +82,14 @@ node provider-node/server.mjs
 
 The inference runtime must already be running on the same machine and serve the configured model under the exact ID passed by Aveiro. This prototype does not launch vLLM, SGLang, llama.cpp, Ollama or another runtime.
 
+## Connecting to the Aveiro registry
+
+An Aveiro administrator first creates an invited provider through the private `POST /api/admin/provider-nodes` endpoint. The response displays the node ID and secret once. The provider operator configures those values as `AVEIRO_NODE_ID` and `AVEIRO_NODE_SECRET`, and copies the exact approved model IDs into `AVEIRO_ALLOWED_MODELS`.
+
+Set `AVEIRO_CONTROL_PLANE_URL` to the public Aveiro HTTPS origin. The node then sends a signed heartbeat every 30 seconds to `POST /api/provider-nodes/heartbeat`. Before reporting readiness, it queries its local runtime's `GET /v1/models` endpoint and reports only exact allowlisted IDs that the runtime actually advertises. The heartbeat contains no prompts, user identity or provider API keys.
+
+An administrator can inspect node status through `GET /api/admin/provider-nodes` and revoke a node through `DELETE /api/admin/provider-nodes`. Revocation causes the control plane to reject subsequent heartbeats. This registry is not yet connected to inference scheduling, so registering a node does not make it selectable by end users.
+
 ## Endpoints
 
 - `GET /healthz`: minimal unauthenticated liveness check.
@@ -103,4 +114,4 @@ From the repository root:
 npm run test:provider-node
 ```
 
-The tests use a fake local OpenAI-compatible server. They verify authentication, replay rejection, request integrity, model allowlisting and streaming. Passing these tests does not verify GPU performance, model quality, licensing, deployment security, or live networking.
+The tests use fake local OpenAI-compatible and control-plane servers. They verify inference authentication, replay rejection, request integrity, model allowlisting, SSE streaming, readiness detection and the signed heartbeat client. Passing these tests does not verify a real GPU, model quality, licensing, production TLS, persistent Redis availability, or live deployment security.
