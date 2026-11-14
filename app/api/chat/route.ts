@@ -11,6 +11,7 @@ import {
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 180;
 
 type Message = { role: "system" | "user" | "assistant"; content: string };
 const hits = new Map<string, { count: number; reset: number }>();
