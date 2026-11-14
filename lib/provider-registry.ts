@@ -35,7 +35,7 @@ function redisConfiguration() {
     throw new Error("Provider registry storage is not configured.");
   }
   const url = new URL(endpoint);
-  if (url.protocol !== "https:" || url.username || url.password) {
+  if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash) {
     throw new Error("AVEIRO_REDIS_REST_URL must be an HTTPS URL without embedded credentials.");
   }
   return { url: url.toString().replace(/\/$/, ""), token };
@@ -241,15 +241,17 @@ export async function acceptProviderHeartbeat(
   ]);
   if (replay !== "OK") return { ok: false, status: 401, error: "Heartbeat nonce was already used." };
 
-  const models = Array.isArray(data.models) ? data.models : [];
+  const models = Array.isArray(data.models) ? data.models as unknown[] : null;
   const activeJobs = data.activeJobs;
   const maxConcurrent = data.maxConcurrent;
   const runtime = data.runtime;
   const runtimeStatus = data.runtimeStatus;
   if (
+    !models || models.length > 8 ||
     models.some((model) => typeof model !== "string" || !record.allowedModels.includes(model)) ||
     !Number.isInteger(activeJobs) || (activeJobs as number) < 0 ||
     !Number.isInteger(maxConcurrent) || (maxConcurrent as number) < 1 || (maxConcurrent as number) > 32 ||
+    (activeJobs as number) > (maxConcurrent as number) ||
     (runtimeStatus !== "ready" && runtimeStatus !== "unavailable") ||
     runtime !== "openai-compatible-http"
   ) {
