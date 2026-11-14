@@ -16,7 +16,10 @@ jobs:
         with:
           node-version: 22
       - run: npm install
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
       - run: npm run typecheck
       - run: npm run lint
+      - run: npm run test:provider-node
       - run: npm run build
       - run: docker build -t averoai:ci .
