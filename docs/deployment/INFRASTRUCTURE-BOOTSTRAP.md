@@ -22,7 +22,7 @@ The existing Dockerfile remains available for a portable container deployment. T
 3. Keep database access private; do not publish the REST token or share it in screenshots.
 4. Copy the database's HTTPS REST URL and read/write REST token into the Vercel environment variables in the next section.
 
-The current Upstash Free plan is intended for prototypes and includes one database, 256 MB data, 500,000 commands per month and 10 GB monthly bandwidth. Treat these as prototype limits, not a production capacity promise. The registry performs multiple Redis commands per catalogue lookup, reservation and heartbeat, so monitor command usage as soon as a real node is connected. See the [Upstash Redis pricing page](https://upstash.com/pricing/redis).
+The current Upstash Free plan is intended for prototypes and includes 256 MB data, 500,000 commands per month and 10 GB monthly bandwidth. Upstash's pricing FAQ currently says an account can create up to 10 free databases, so use separate databases for Preview and Production rather than sharing a single dataset. Treat Free limits as prototype capacity, not a production promise. The registry performs multiple Redis commands per catalogue lookup, reservation and heartbeat, so monitor command usage as soon as a real node is connected. See the [Upstash Redis pricing page](https://upstash.com/pricing/redis).
 
 The registry client uses Upstash's documented REST command format: a single JSON array in the POST request body, including Redis commands such as `PING`, `GET`, `SET`, `SMEMBERS` and `EVAL`. See the [Upstash REST API guide](https://upstash.com/docs/redis/features/restapi).
 
@@ -66,6 +66,7 @@ Copy these values directly into the hosting provider's private Environment Varia
 | `APP_URL` | Set to the final preview URL after the first deploy |
 
 5. Leave all AI provider API keys empty until Aveiro has its own authorized provider account and budget. The registry can be smoke-tested without an inference provider.
+6. Keep the Preview and Production environment variables separate. Create a distinct Upstash database and distinct encryption/admin secrets for Production; never point two environments at the same registry database.
 6. Redeploy after setting or changing environment variables.
 
 Vercel's Hobby plan is limited to personal, non-commercial use. It is appropriate only for private development/testing that meets those terms. Before Aveiro becomes a commercial/public product, choose a plan/host whose terms permit that use. Vercel lists Pro at $20 USD/month before applicable taxes and usage. Review the [Vercel pricing page](https://vercel.com/pricing) and [Hobby terms](https://vercel.com/legal/terms) before choosing. Do not silently treat a free personal plan as production hosting.
@@ -93,13 +94,13 @@ This bootstrap does not create or claim:
 
 Do not add a provider node or set `AVEIRO_APPROVED_COMMUNITY_MODELS` until an exact checkpoint, model licence, commercial-use terms, runtime compatibility and the provider's privacy/security controls have been reviewed. A provider operator can technically inspect prompts processed on their node.
 
-## 7. Dependency security gate
+## 8. Dependency security gate
 
 The build pins the Next.js 15.5 line to `15.5.29` and keeps the compatible React release at `19.1.10`. The dependency tree previously included PostCSS `<=8.5.22` transitively through Next.js; this falls inside published PostCSS advisories. The project now forces the compatible patched PostCSS `8.5.32` through npm `overrides`. The GitHub Actions workflow runs `npm audit --omit=dev --audit-level=high` before type checking and blocks deployment-quality CI if a high-severity production dependency advisory remains. Review the [PostCSS security advisory](https://github.com/postcss/postcss/security/advisories/GHSA-fxqj-rqcc-2cmp) and keep this override under review as Next.js updates.
 
 The audit step covers production dependencies only. Development-tool advisories may still appear in the full `npm install` summary and should be reviewed separately; they do not get silently treated as fixed by this gate.
 
-## 8. Upgrade path
+## 9. Upgrade path
 
 For a private prototype, Vercel Preview + one Upstash Free database is sufficient to validate web deployment and Redis connectivity. Before inviting external users, review the hosting terms, upgrade to commercial-capable compute/storage as needed, establish spend alerts and rate limits, configure a production domain, and complete account security, authentication, retention, abuse and privacy work.
 
