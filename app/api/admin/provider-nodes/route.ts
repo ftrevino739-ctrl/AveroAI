@@ -16,12 +16,26 @@ function authorized(request: Request): boolean {
 }
 
 async function readBody(request: Request) {
-  const raw = await request.text();
-  if (new TextEncoder().encode(raw).byteLength > 16_000) {
-    throw new AdminRequestError("Request body is too large.");
+  const reader = request.body?.getReader();
+  if (!reader) throw new AdminRequestError("Request body is required.");
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > 16_000) {
+        await reader.cancel();
+        throw new AdminRequestError("Request body is too large.");
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
   }
   try {
-    return JSON.parse(raw) as Record<string, unknown>;
+    return JSON.parse(Buffer.concat(chunks).toString("utf8")) as Record<string, unknown>;
   } catch {
     throw new AdminRequestError("Request body must be valid JSON.");
   }
