@@ -25,7 +25,10 @@ export async function GET(request: Request) {
     return Response.json({ nodes: await listProviderNodes() }, {
       headers: { "Cache-Control": "no-store" }
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof AdminRequestError) {
+      return Response.json({ error: error.message }, { status: 400 });
+    }
     return Response.json({ error: "Provider registry storage is unavailable or misconfigured." }, { status: 503 });
   }
 }
@@ -58,7 +61,8 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not create provider node.";
-    const clientError = /approved|Choose between|label|model IDs|requested model/i.test(message);
+    const clientError = error instanceof AdminRequestError ||
+      /approved|Choose between|label|model IDs|requested model/i.test(message);
     return Response.json({
       error: clientError ? message : "Provider node could not be created. Check server registry configuration."
     }, { status: clientError ? 400 : 503 });
