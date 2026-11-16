@@ -125,6 +125,9 @@ export async function POST(request: NextRequest) {
 
   const model = communityModel || models.find((item) => item.id === modelId) || customModel;
   if (!model) return error("Modelo no reconocido.", 400);
+  if (model.providerId !== "community" || !dynamicCommunityModelId) {
+    return error("Aveiro solo acepta inferencia de modelos open-weight mediante nodos comunitarios aprobados. Los proveedores propietarios y endpoints externos están deshabilitados.", 403);
+  }
 
   if (!Array.isArray(data.messages) || data.messages.length < 1 || data.messages.length > 40) {
     return error("La conversación debe contener entre 1 y 40 mensajes.", 400);
