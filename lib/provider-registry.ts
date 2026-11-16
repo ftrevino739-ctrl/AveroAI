@@ -34,6 +34,13 @@ return next`;
 const RELEASE_SLOT_SCRIPT = `local current = tonumber(redis.call('GET', KEYS[1]) or '0')
 if current <= 1 then return redis.call('DEL', KEYS[1]) end
 return redis.call('DECR', KEYS[1])`;
+const RATE_LIMIT_SCRIPT = `local count = redis.call('INCR', KEYS[1])
+local ttl = redis.call('TTL', KEYS[1])
+if count == 1 or ttl < 0 then
+  redis.call('EXPIRE', KEYS[1], ARGV[2])
+  ttl = tonumber(ARGV[2])
+end
+return { count, ttl }`;
 const REVOKE_NODE_SCRIPT = `local raw = redis.call('GET', KEYS[1])
 if not raw then return 0 end
 local record = cjson.decode(raw)
@@ -103,6 +110,27 @@ function redisConfiguration() {
 export async function checkRegistryConnection(): Promise<boolean> {
   const response = await redisCommand<string>(["PING"]);
   return response === "PONG";
+}
+
+export async function consumeChatRateLimit(
+  clientIdentifier: string,
+  limit = 15,
+  windowSeconds = 60
+ ): Promise<{ allowed: boolean; remaining: number; retryAfterSeconds: number }> {
+  if (!clientIdentifier || clientIdentifier.length > 200 || !Number.isInteger(limit) || limit < 1 ||
+      !Number.isInteger(windowSeconds) || windowSeconds < 1) {
+    throw new Error("Chat rate-limit input is invalid.");
+  }
+  const digest = createHmac("sha256", encryptionKey()).update(clientIdentifier, "utf8").digest("hex");
+  const result = await redisCommand<number[]>([
+    "EVAL", RATE_LIMIT_SCRIPT, "1", `aveiro:chat-rate:${digest}`, String(limit), String(windowSeconds)
+  ]);
+  const count = Number(result?.[0]);
+  const ttl = Number(result?.[1]);
+  if (!Number.isSafeInteger(count) || count < 1 || !Number.isSafeInteger(ttl) || ttl < 0) {
+    throw new Error("Chat rate-limit storage returned an invalid result.");
+  }
+  return { allowed: count <= limit, remaining: Math.max(0, limit - count), retryAfterSeconds: ttl };
 }
 
 async function redisCommand<T>(command: Array<string | number>): Promise<T> {
