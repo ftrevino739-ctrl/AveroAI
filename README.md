@@ -10,7 +10,7 @@ Aveiro.ai es una plataforma web multimodelo en desarrollo, con interfaz Liquid G
 - Respuestas en streaming y opción para detener la generación.
 - Copiar respuestas y exportar conversaciones a JSON.
 - Adjuntar archivos de texto, Markdown, CSV, JSON y LOG (hasta 150 KB).
-- Adaptadores de servidor para OpenAI, Anthropic, Gemini mediante endpoint compatible con OpenAI, OpenRouter y endpoint personalizado.
+- La ruta pública de inferencia está restringida a modelos open-weight servidos por nodos comunitarios aprobados; los adaptadores de proveedores propietarios no forman parte del catálogo público.
 - Prototipo de dispatch a un nodo remoto de Aveiro, autenticado con HMAC y sin API key del usuario.
 - Servicio independiente Provider Node con allowlist de modelos, límites, timeout y streaming.
 - Las credenciales del servidor no se exponen al navegador.
