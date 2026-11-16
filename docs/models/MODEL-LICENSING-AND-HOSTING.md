@@ -132,15 +132,20 @@ Before activating a community-hosted model:
 
 ## Current repository status — honest checklist
 
-- [x] Existing Next.js chat UI and server-side provider adapters are present.
-- [x] Community-compute architecture is documented.
-- [x] This model licensing/hosting decision record is added.
-- [x] A read-only model-access metadata endpoint is added.
-- [ ] Existing chat still requires server-side provider API keys; it is not yet the keyless public community network.
-- [ ] No provider node, node authentication, scheduler, job queue, credit ledger or inference cluster is implemented yet.
-- [ ] Kimi K2.5 / K3 are not connected to the live chat route.
-- [ ] GPT / Claude are not activated for Aveiro and no commercial agreement is represented as obtained.
-- [ ] CI/build must pass on the pull request before merge.
-- [ ] Production authentication, shared rate limiting, abuse controls, privacy/legal review and hosting are still required.
+- [x] Next.js Liquid Glass chat UI, local conversation history, streaming and browser-only end-user experience contract.
+- [x] Community-compute architecture, Provider Node protocol and exact-model licensing/hosting decision record.
+- [x] Standalone Provider Node with HMAC request authentication, timestamp/nonce replay protection, strict model allowlist, request limits, timeouts and SSE streaming.
+- [x] Private Redis-backed node registry, AES-256-GCM encrypted node secrets, admin enrollment/revocation and signed readiness heartbeats.
+- [x] Live model catalogue derived only from approved models on online, ready nodes.
+- [x] Initial multi-node exact-model scheduler with atomic concurrency reservations and reservation release.
+- [x] Public liveness/readiness endpoints and deployment bootstrap documentation.
+- [x] CI on the current foundation PR head has passed production dependency audit, typecheck, lint, Provider Node tests, Next.js build and Docker build.
+- [ ] Real Redis, hosted application and remote GPU node have not yet been provisioned or smoke-tested together.
+- [ ] No production user accounts, durable per-user quotas, credits ledger/token metering, durable job queue or controlled cross-node retries.
+- [ ] No public provider onboarding terms, moderation/abuse operations, retention controls or independent security review.
+- [ ] No community model is approved by default. AVEIRO_APPROVED_COMMUNITY_MODELS must remain empty until the exact checkpoint, licence, commercial terms and deployment profile are reviewed.
+- [ ] Kimi K2.5 / K3 and gpt-oss remain candidates; their presence in research/catalogue metadata does not mean they are deployed or available.
+- [ ] GPT and Claude service models remain excluded from public inference. No API, reseller or hosting authorization is represented as obtained.
+- [ ] Production deployment, privacy/legal review, operational budget and public launch gates remain outstanding.
 
-**Do not announce Aveiro as an unlimited free service.** Community hardware must be contributed and online; credits do not pay for power, bandwidth or maintenance.
+**Do not announce Aveiro as an unlimited free service.** Community hardware must be voluntarily contributed, approved, online and adequately provisioned; credits do not pay for electricity, bandwidth, hardware or maintenance. A model is selectable only while an approved, ready node has capacity for that exact model.
