@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { NextRequest } from "next/server";
 import { models, type ProviderId, COMMUNITY_MODEL_PREFIX } from "@/lib/models";
-import { reserveProviderNodeForModel, type ProviderNodeReservation } from "@/lib/provider-registry";
+import { consumeChatRateLimit, reserveProviderNodeForModel, type ProviderNodeReservation } from "@/lib/provider-registry";
 import type { CommunityNodeConfig } from "@/lib/community-node";
 import {
   communityNodeEndpoint,
@@ -14,8 +14,6 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 180;
 
 type Message = { role: "system" | "user" | "assistant"; content: string };
-const hits = new Map<string, { count: number; reset: number }>();
-
 function ready(id: ProviderId, communityConfigured: boolean) {
   if (id === "community") return communityConfigured;
   const env: Record<Exclude<ProviderId, "community">, string | undefined> = {
@@ -31,22 +29,6 @@ function ready(id: ProviderId, communityConfigured: boolean) {
   ));
 }
 
-function limited(key: string) {
-  const now = Date.now();
-  if (hits.size > 2000) {
-    for (const [ip, entry] of hits) {
-      if (entry.reset < now) hits.delete(ip);
-    }
-  }
-  const item = hits.get(key);
-  if (!item || item.reset < now) {
-    hits.set(key, { count: 1, reset: now + 60_000 });
-    return false;
-  }
-  item.count++;
-  return item.count > 15;
-}
-
 function error(message: string, status: number) {
   return Response.json(
     { error: message },
@@ -55,9 +37,18 @@ function error(message: string, status: number) {
 }
 
 export async function POST(request: NextRequest) {
-  const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
-  if (limited(forwarded)) {
-    return error("Has enviado demasiadas solicitudes. Espera un minuto e inténtalo de nuevo.", 429);
+  const forwarded = request.headers.get("x-real-ip") || request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+  let rateLimit: { allowed: boolean; remaining: number; retryAfterSeconds: number };
+  try {
+    rateLimit = await consumeChatRateLimit(forwarded.slice(0, 200));
+  } catch {
+    return error("El control de solicitudes no está disponible. Inténtalo de nuevo más tarde.", 503);
+  }
+  if (!rateLimit.allowed) {
+    return Response.json(
+      { error: "Has enviado demasiadas solicitudes. Espera un minuto e inténtalo de nuevo." },
+      { status: 429, headers: { "Cache-Control": "no-store", "Retry-After": String(rateLimit.retryAfterSeconds) } }
+    );
   }
 
   let body: unknown;
