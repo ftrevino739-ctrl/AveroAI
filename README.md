@@ -122,7 +122,7 @@ Si el modelo elegido no está disponible, Aveiro debe informar la indisponibilid
 
 ## Seguridad y privacidad
 
-El historial se almacena en el navegador mediante localStorage y no se sincroniza entre dispositivos. El contenido enviado a un nodo comunitario puede ser inspeccionado técnicamente por el operador de ese nodo; no se promete confidencialidad extremo a extremo. El gateway no debe enviar identidad de usuario al nodo. La limitación incluida en memoria es una protección básica para despliegues pequeños; antes de abrir Aveiro al público hacen falta autenticación de usuarios, rate limiting compartido, cuotas, moderación, auditoría, reglas de retención y revisión de seguridad.
+El historial se almacena en el navegador mediante localStorage y no se sincroniza entre dispositivos. El contenido enviado a un nodo comunitario puede ser inspeccionado técnicamente por el operador de ese nodo; no se promete confidencialidad extremo a extremo. El gateway no debe enviar identidad de usuario al nodo. El endpoint de chat ahora aplica un límite compartido de 15 solicitudes por IP cada 60 segundos mediante Redis Lua atómico; las IP se convierten en HMAC antes de almacenarse y Redis se considera obligatorio (si falla, el gateway responde 503 en lugar de desactivar la protección). Este control por IP no sustituye autenticación, cuotas persistentes por cuenta, moderación, auditoría, reglas de retención ni revisión de seguridad.
 
 El Provider Node restringe su upstream a loopback para no convertirse en proxy arbitrario. No expongas su puerto HTTP directamente a Internet. Usa TLS, un proxy inverso seguro o una red privada, y restringe el tráfico entrante al control plane autorizado. No registres secretos ni prompts sensibles.
 
