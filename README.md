@@ -118,6 +118,7 @@ Si el modelo elegido no está disponible, Aveiro debe informar la indisponibilid
 - `lib/models.ts`: modelos y tipos de proveedor.
 - `lib/community-node.ts`: configuración server-side y firma de solicitudes del nodo.
 - `provider-node/`: servicio independiente para nodos de GPU.
+- `db/migrations/`: esquema PostgreSQL para cuentas, verificación de correo, límites, reservas y ledger append-only; se valida en CI con PostgreSQL 16, pero aún no está conectado a la aplicación.
 - `app/globals.css`: sistema visual Liquid Glass.
 
 ## Seguridad y privacidad
