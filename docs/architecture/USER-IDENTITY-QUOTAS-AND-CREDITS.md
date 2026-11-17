@@ -20,7 +20,7 @@
 Use a managed PostgreSQL database for:
 - users: immutable UUID, normalized unique email, status (pending, active, suspended, deleted), created/updated timestamps.
 - email_verification_tokens: user ID, SHA-256 token hash, expiry, consumed timestamp. Never store raw verification tokens.
-- usage_ledger: append-only entries with UUID, user ID, request ID (unique), entry type, model ID, input/output token counts when authoritative, signed integer credit delta, metadata version and creation time.
+- usage_ledger: append-only entries with UUID, user ID, request ID, unique per-entry idempotency key, entry type, model ID, input/output token counts when authoritative, signed integer credit delta, metadata version and creation time. Multiple compensating entries may refer to one request.
 - usage_reservations: request ID (unique), user ID, model ID, reserved amount, status, expiry and settlement reference. Reservation and ledger writes must be transactional.
 - account_limits: plan/limit version, period boundaries and explicit request/token/credit caps.
 
@@ -68,7 +68,7 @@ Do not enable a production login endpoint until email delivery, canonical origin
 
 - Start with explicit server-configured free-tier limits, not a promise of unlimited use. Limits must be versioned and visible to users before sending a request.
 - Reserve a conservative maximum charge in a PostgreSQL transaction before dispatch. Reject the request if the account is inactive, the limit is exhausted or the reservation cannot be committed.
-- Use the existing unique request ID as the idempotency key. Repeated settlement attempts must not create duplicate ledger entries.
+- Use a unique idempotency key for each ledger entry and a unique request ID for each reservation. Multiple compensating ledger entries may reference one request; retries with the same idempotency key must not duplicate an entry.
 - Settle only from authoritative provider usage metadata. If a node/runtime cannot report trustworthy input and output token counts, mark the request unmetered and do not debit credits or issue provider rewards; apply a separate strict request/concurrency cap until metering is supported.
 - On a confirmed failure with no billable usage, release the reservation. On partial usage, settle only the measured amount according to the published policy.
 - Ledger entries are append-only. Corrections use compensating entries; never mutate historical entries or accept balance changes from the browser.
@@ -98,5 +98,7 @@ These endpoints must not be stubbed with fake success responses. Until the requi
 5. Extend the Provider Node protocol to return trustworthy usage metadata; test success, partial usage, cancellation, timeout, duplicate settlement and provider disconnect.
 6. Add append-only ledger settlement and a user-visible usage page.
 7. Complete privacy/retention disclosures, abuse operations, security review and production deployment review before public launch.
+
+**Schema milestone:** the first PostgreSQL migration is available at `db/migrations/0001_identity_and_usage.sql`. It creates the account, one-time email token, limits, reservation and append-only ledger tables with constraints and indexes. GitHub Actions now starts PostgreSQL 16 and applies the migration as a CI gate. This validates the DDL in CI; it does not provision a managed database or connect the application to one.
 
 **Current gate:** no PostgreSQL database, email provider, sender domain or production deployment has been provisioned. Therefore this document is an implementation contract, not a claim that accounts, email login, quotas or credits already work.
