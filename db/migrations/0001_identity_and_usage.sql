@@ -87,7 +87,8 @@ CREATE INDEX IF NOT EXISTS usage_reservations_expiry_idx
 CREATE TABLE IF NOT EXISTS usage_ledger (
   id uuid PRIMARY KEY,
   user_id uuid NOT NULL REFERENCES app_users(id) ON DELETE RESTRICT,
-  request_id uuid NOT NULL UNIQUE,
+  request_id uuid NOT NULL,
+  idempotency_key text NOT NULL UNIQUE,
   entry_type text NOT NULL
     CHECK (entry_type IN ('usage_debit', 'usage_refund', 'credit_grant', 'credit_adjustment')),
   model_id text,
@@ -107,6 +108,9 @@ CREATE TABLE IF NOT EXISTS usage_ledger (
     entry_type = 'credit_adjustment'
   )
 );
+
+CREATE INDEX IF NOT EXISTS usage_ledger_request_idx
+  ON usage_ledger (request_id, created_at);
 
 CREATE INDEX IF NOT EXISTS usage_ledger_user_created_idx
   ON usage_ledger (user_id, created_at DESC, id);
