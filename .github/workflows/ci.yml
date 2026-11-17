@@ -36,6 +36,7 @@ jobs:
           PGPASSWORD=ci-only-password psql -h 127.0.0.1 -U averoai -d averoai_test -v ON_ERROR_STOP=1 -f db/migrations/0001_identity_and_usage.sql
           PGPASSWORD=ci-only-password psql -h 127.0.0.1 -U averoai -d averoai_test -v ON_ERROR_STOP=1 -c "SELECT to_regclass('public.app_users'), to_regclass('public.email_verification_tokens'), to_regclass('public.account_limits'), to_regclass('public.usage_reservations'), to_regclass('public.usage_ledger');"
           PGPASSWORD=ci-only-password psql -h 127.0.0.1 -U averoai -d averoai_test -v ON_ERROR_STOP=1 -c "SELECT tgname FROM pg_trigger WHERE tgrelid = 'public.usage_ledger'::regclass AND NOT tgisinternal;"
+          PGPASSWORD=ci-only-password psql -h 127.0.0.1 -U averoai -d averoai_test -v ON_ERROR_STOP=1 -f db/tests/0001_identity_and_usage.test.sql
       - run: npm install
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
