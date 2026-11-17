@@ -88,7 +88,7 @@ La plataforma puede añadir al selector el modelo configurado en el servidor med
 
 Configuración, comandos y límites técnicos: [Provider Node README](provider-node/README.md). Protocolo: [Provider Node Protocol v1](docs/architecture/PROVIDER-NODE-PROTOCOL.md).
 
-**Límite actual:** el registro y el scheduler multi-nodo inicial ya existen, pero faltan pruebas con Redis y GPU reales, cola distribuida, reintentos controlados, ledger de créditos, autenticación de usuarios, cuotas persistentes y revisión de seguridad. La conexión remota requiere HTTPS y restricción de acceso de red; el Provider Node por sí solo no termina TLS. No habilites nodos comunitarios públicos o no confiables todavía.
+**Límite actual:** el registro y el scheduler multi-nodo inicial ya existen, pero faltan pruebas con Redis y GPU reales, cola distribuida, reintentos controlados, ledger de créditos, autenticación de usuarios, cuotas persistentes y revisión de seguridad. La arquitectura de cuentas, login por enlace de correo, sesiones, CSRF, cuotas y ledger se especifica en [User Identity, Quotas and Credits](docs/architecture/USER-IDENTITY-QUOTAS-AND-CREDITS.md); es un contrato de implementación, no una función activa. Requiere PostgreSQL duradero, correo transaccional y dominio verificado, que todavía no están provisionados. La conexión remota requiere HTTPS y restricción de acceso de red; el Provider Node por sí solo no termina TLS. No habilites nodos comunitarios públicos o no confiables todavía.
 
 ## Comandos
 
