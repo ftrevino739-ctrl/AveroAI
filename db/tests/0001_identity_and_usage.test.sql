@@ -5,6 +5,9 @@ BEGIN;
 INSERT INTO app_users (id, email, status)
 VALUES ('00000000-0000-4000-8000-000000000001', 'ci-schema-test@example.invalid', 'active');
 
+INSERT INTO app_users (id, email, status)
+VALUES ('00000000-0000-4000-8000-000000000006', 'ci-schema-other@example.invalid', 'active');
+
 INSERT INTO email_verification_tokens (id, user_id, token_hash, expires_at)
 VALUES (
   '00000000-0000-4000-8000-000000000002',
@@ -50,7 +53,22 @@ SET status = 'settled',
     updated_at = now()
 WHERE request_id = '00000000-0000-4000-8000-000000000004';
 
-DO $$
+DO $
+BEGIN
+  BEGIN
+    UPDATE usage_reservations
+    SET user_id = '00000000-0000-4000-8000-000000000006'
+    WHERE request_id = '00000000-0000-4000-8000-000000000004';
+    RAISE EXCEPTION 'settlement foreign key allowed a cross-account ledger reference';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM = 'settlement foreign key allowed a cross-account ledger reference' THEN
+      RAISE;
+    END IF;
+  END;
+END;
+$;
+
+DO $
 BEGIN
   BEGIN
     UPDATE usage_ledger
