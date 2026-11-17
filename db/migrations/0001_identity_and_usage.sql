@@ -119,9 +119,14 @@ CREATE INDEX IF NOT EXISTS usage_ledger_model_created_idx
   ON usage_ledger (model_id, created_at DESC)
   WHERE model_id IS NOT NULL;
 
+ALTER TABLE usage_ledger
+  ADD CONSTRAINT usage_ledger_id_user_request_unique
+  UNIQUE (id, user_id, request_id);
+
 ALTER TABLE usage_reservations
   ADD CONSTRAINT usage_reservations_settlement_fk
-  FOREIGN KEY (settlement_id) REFERENCES usage_ledger(id) ON DELETE RESTRICT;
+  FOREIGN KEY (settlement_id, user_id, request_id)
+  REFERENCES usage_ledger(id, user_id, request_id) ON DELETE RESTRICT;
 
 -- Ledger history is append-only. Corrections must be compensating entries.
 CREATE OR REPLACE FUNCTION reject_usage_ledger_mutation()
