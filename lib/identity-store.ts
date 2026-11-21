@@ -31,7 +31,7 @@ export function normalizeAccountEmail(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const email = value.trim().toLowerCase();
   if (Buffer.byteLength(email, "utf8") < 3 || Buffer.byteLength(email, "utf8") > 320 ||
-      !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/u.test(email)) return null;
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(email)) return null;
   return email;
 }
 
