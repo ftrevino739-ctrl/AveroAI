@@ -133,7 +133,7 @@ export async function consumeChatRateLimit(
   return { allowed: count <= limit, remaining: Math.max(0, limit - count), retryAfterSeconds: ttl };
 }
 
-async function redisCommand<T>(command: Array<string | number>): Promise<T> {
+export async function redisCommand<T>(command: Array<string | number>): Promise<T> {
   const config = redisConfiguration();
   const response = await fetch(config.url, {
     method: "POST",

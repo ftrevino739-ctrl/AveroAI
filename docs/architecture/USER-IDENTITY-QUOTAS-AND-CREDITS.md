@@ -1,6 +1,6 @@
 # User identity, quotas and credits — architecture decision
 
-**Status:** database and magic-link token primitives implemented; no account HTTP flow is active.
+**Status:** PostgreSQL identity and Redis session primitives implemented; no account HTTP flow is active.
 **Scope:** browser-only end-user accounts, abuse controls, durable usage accounting and future credits.
 **Depends on:** the existing Redis-backed control plane and the community inference gateway.
 
@@ -29,7 +29,7 @@ PostgreSQL is authoritative for account state, balances and usage. Never use Red
 ### Redis — ephemeral security and coordination
 
 Continue using Redis for:
-- short-lived opaque session records;
+- short-lived opaque session records (SHA-256 token digest only, 24-hour idle expiry and 7-day absolute expiry);
 - verification and login attempt rate limits;
 - temporary inference concurrency reservations already used by the scheduler;
 - short-lived idempotency/coordination keys where needed.
@@ -87,7 +87,7 @@ The gateway resolves the authenticated account and enforces limits before schedu
 - GET /api/account/usage — returns current limits and ledger-derived usage summary.
 - POST /api/chat — requires active session and a committed usage reservation before dispatch; remains exact-model only.
 
-These endpoints must not be stubbed with fake success responses. The PostgreSQL connection and transactional magic-link token store now exist as internal server modules, but there is still no email delivery, HTTP authentication route, browser session or account-protected chat. Until those pieces and the required infrastructure exist, the current pre-account staging behavior remains explicitly non-production and must not be presented as a public account system.
+These endpoints must not be stubbed with fake success responses. The PostgreSQL connection, transactional magic-link token store and Redis-backed opaque session store now exist as internal server modules, but there is still no email delivery, HTTP authentication route, browser cookie or account-protected chat. Until those pieces and the required infrastructure exist, the current pre-account staging behavior remains explicitly non-production and must not be presented as a public account system.
 
 ## 8. Delivery gates
 
@@ -99,6 +99,6 @@ These endpoints must not be stubbed with fake success responses. The PostgreSQL 
 6. Add append-only ledger settlement and a user-visible usage page.
 7. Complete privacy/retention disclosures, abuse operations, security review and production deployment review before public launch.
 
-**Persistence milestone:** `lib/postgres.ts` provides a lazy PostgreSQL pool with production TLS enforcement, and `lib/identity-store.ts` implements transactional magic-link creation, hash-only persistence, replacement of older links, one-time concurrent-safe consumption, expiry enforcement and account activation. `lib/identity-store.test.ts` exercises these operations against PostgreSQL 16 in CI. The adapter does not send email, issue sessions or expose HTTP routes; this does not provision a managed database or connect the production application.
+**Persistence milestone:** `lib/postgres.ts` provides a lazy PostgreSQL pool with production TLS enforcement; `lib/identity-store.ts` implements transactional magic-link creation, hash-only persistence, replacement of older links, one-time concurrent-safe consumption, expiry enforcement and account activation; and `lib/session-store.ts` implements opaque Redis sessions with SHA-256-only token keys, revocation, 24-hour idle expiry and a 7-day absolute lifetime. PostgreSQL integration tests and isolated Redis-session tests run in CI. These modules do not send email, set browser cookies or expose HTTP routes; this does not provision managed services or connect the production application.
 
 **Current gate:** no managed PostgreSQL database, email provider, sender domain or production deployment has been provisioned. No login endpoint is exposed and chat is not account-protected. This is an internal persistence milestone, not a claim that accounts, email login, quotas or credits already work.

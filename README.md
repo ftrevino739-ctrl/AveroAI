@@ -96,7 +96,9 @@ Configuración, comandos y límites técnicos: [Provider Node README](provider-n
 
 Se añadió un adaptador PostgreSQL de conexión perezosa y una capa transaccional para emitir y consumir enlaces mágicos de un solo uso. El token se genera de forma criptográficamente aleatoria, solo se guarda su hash SHA-256, caduca a los 15 minutos y su consumo es atómico incluso ante dos redenciones simultáneas. El CI ejecuta pruebas de integración reales contra PostgreSQL 16.
 
-Esto todavía **no activa el inicio de sesión de usuarios**: no hay rutas HTTP de autenticación, entrega de correo, sesiones de navegador ni cuotas conectadas al chat. No se simula el envío del correo ni se acepta inferencia de usuarios anónimos como producción. El usuario final seguirá entrando únicamente desde el navegador y nunca necesitará API keys.
+Esto todavía **no activa el inicio de sesión de usuarios**: no hay rutas HTTP de autenticación, entrega de correo ni cookies de sesión conectadas al navegador o al chat. No se simula el envío del correo ni se acepta inferencia de usuarios anónimos como producción. El usuario final seguirá entrando únicamente desde el navegador y nunca necesitará API keys.
+
+El almacenamiento de sesión ya tiene primitivas Redis independientes: el navegador recibirá un token opaco pensado para una cookie HttpOnly/Secure, Redis conserva solo su hash, la caducidad por inactividad es de 24 horas y la absoluta de 7 días. Estas primitivas todavía no se exponen mediante rutas HTTP.
 
 ## Comandos
 
@@ -105,6 +107,7 @@ Esto todavía **no activa el inicio de sesión de usuarios**: no hay rutas HTTP 
 - `npm run lint` — ESLint.
 - `npm run test:provider-node` — pruebas del protocolo y streaming del nodo.
 - `npm run test:identity-store` — pruebas PostgreSQL de identidad (requiere `AVEIRO_DATABASE_URL`).
+- `npm run test:session-store` — pruebas de sesiones Redis usando un almacén simulado.
 - `npm run build` — compilación de producción.
 - `npm start` — servidor de producción después de compilar.
 
@@ -126,7 +129,8 @@ Si el modelo elegido no está disponible, Aveiro debe informar la indisponibilid
 - `app/api/health/route.ts` y `app/api/ready/route.ts`: liveness y readiness de infraestructura.
 - `lib/models.ts`: modelos y tipos de proveedor.
 - `lib/community-node.ts`: configuración server-side y firma de solicitudes del nodo.
-- `lib/postgres.ts` y `lib/identity-store.ts`: conexión PostgreSQL perezosa y primitivas transaccionales de enlaces mágicos; sin endpoints ni entrega de correo todavía.
+- `lib/postgres.ts` y `lib/identity-store.ts`: conexión PostgreSQL perezosa y primitivas transaccionales de enlaces mágicos.
+- `lib/session-store.ts`: sesiones opacas Redis con hash de token, revocación, caducidad deslizante y límite absoluto.
 - `provider-node/`: servicio independiente para nodos de GPU.
 - `db/migrations/`: esquema PostgreSQL para cuentas, verificación de correo, límites, reservas y ledger append-only; se valida en CI con PostgreSQL 16, pero aún no está conectado a la aplicación.
 - `app/globals.css`: sistema visual Liquid Glass.

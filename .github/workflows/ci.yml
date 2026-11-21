@@ -42,6 +42,8 @@ jobs:
         run: npm run test:identity-store
         env:
           AVEIRO_DATABASE_URL: postgresql://averoai:ci-only-password@127.0.0.1:5432/averoai_test
+      - name: Test Redis-backed opaque sessions
+        run: npm run test:session-store
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
       - run: npm run typecheck
