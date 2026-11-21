@@ -273,6 +273,9 @@ export async function POST(request: NextRequest) {
         if (admission.reason === "limit_not_configured") {
           return error("Tu cuenta no tiene un límite mensual configurado. No se inició la inferencia.", 503);
         }
+        if (admission.reason !== "limit_reached") {
+          return error("No se pudo comprobar el límite de uso de la cuenta.", 503);
+        }
         const retryAfterSeconds = Math.max(1, Math.ceil(
           (Date.parse(admission.usage.periodEndsAt) - Date.now()) / 1000
         ));
