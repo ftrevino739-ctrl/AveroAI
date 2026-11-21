@@ -132,19 +132,20 @@ Si el modelo elegido no está disponible, Aveiro debe informar la indisponibilid
 ## Arquitectura
 
 - `app/page.tsx`: interfaz y estado de conversaciones.
-- `app/api/chat/route.ts`: gateway server-side, dispatch al nodo comunitario y streaming.
+- `app/api/chat/route.ts`: gateway server-side, autenticación, reserva mensual por cuenta, dispatch al nodo comunitario y streaming.
+- `app/api/account/usage/route.ts`: resumen del límite mensual de solicitudes.
 - `app/api/providers/route.ts`: catálogo de proveedores configurados.
 - `app/api/health/route.ts` y `app/api/ready/route.ts`: liveness y readiness de infraestructura.
 - `lib/models.ts`: modelos y tipos de proveedor.
 - `lib/community-node.ts`: configuración server-side y firma de solicitudes del nodo.
 - `lib/postgres.ts` y `lib/identity-store.ts`: conexión PostgreSQL perezosa y primitivas transaccionales de enlaces mágicos.
 - `lib/session-store.ts`: sesiones Redis opacas, CSRF ligado a sesión, revocación y expiraciones.
-- `lib/quota-store.ts`: admisión transaccional de solicitudes por cuenta y periodo UTC mensual; sin estimar tokens.
+- `lib/quota-store.ts`: admisión transaccional de solicitudes por cuenta y periodo UTC mensual; registra uso no medido sin estimar tokens.
 - `lib/mail.ts`: adaptador SMTP genérico para enlaces de un solo uso.
 - `lib/auth-security.ts`: origen canónico, cookies host-only y validación CSRF.
 - `app/auth/page.tsx`: interfaz browser-only de solicitud y confirmación de acceso.
 - `provider-node/`: servicio independiente para nodos de GPU.
-- `db/migrations/`: esquema PostgreSQL para cuentas, verificación de correo, límites, reservas y ledger append-only; se valida en CI con PostgreSQL 16, pero aún no está conectado a la aplicación.
+- `db/migrations/`: esquema PostgreSQL para cuentas, verificación de correo, límites, reservas y ledger append-only; se valida en CI con PostgreSQL 16 y lo utilizan los almacenes de identidad y cuotas.
 - `app/globals.css`: sistema visual Liquid Glass.
 
 ## Seguridad y privacidad

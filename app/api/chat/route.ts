@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { getIdentityPool } from "@/lib/postgres";
 import { createIdentityStore } from "@/lib/identity-store";
 import { sessionStore } from "@/lib/session-store";
+import { createQuotaStore } from "@/lib/quota-store";
 import {
   SESSION_COOKIE_NAME,
   CSRF_COOKIE_NAME,
@@ -51,8 +52,8 @@ function accountAuthRequired(): boolean {
     (process.env.NODE_ENV === "production" && process.env.VERCEL_ENV !== "preview");
 }
 
-async function requireAccountSession(request: NextRequest): Promise<Response | null> {
-  if (!accountAuthRequired()) return null;
+async function requireAccountSession(request: NextRequest): Promise<{ accountId: string | null } | Response> {
+  if (!accountAuthRequired()) return { accountId: null };
 
   let expectedOrigin: string;
   try {
@@ -91,7 +92,7 @@ async function requireAccountSession(request: NextRequest): Promise<Response | n
         { status: 429, headers: { "Cache-Control": "no-store", "Retry-After": String(accountLimit.retryAfterSeconds) } }
       );
     }
-    return null;
+    return { accountId: account.id };
   } catch {
     return error("La autenticación no está disponible temporalmente.", 503);
   }
@@ -112,8 +113,9 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const authFailure = await requireAccountSession(request);
-  if (authFailure) return authFailure;
+  const authContext = await requireAccountSession(request);
+  if (authContext instanceof Response) return authContext;
+  const accountId = authContext.accountId;
 
   let body: unknown;
   try {
@@ -223,7 +225,7 @@ export async function POST(request: NextRequest) {
   const releaseReservation = async () => {
     if (!dynamicReservation || reservationReleased) return;
     reservationReleased = true;
-    await dynamicReservation.release();
+    await dynamicReservation.release().catch(() => {});
   };
 
   if (!ready(model.providerId, Boolean(communityConfig || dynamicReservation))) {
@@ -232,6 +234,61 @@ export async function POST(request: NextRequest) {
       `Configura el acceso autorizado de ${model.provider} en las variables privadas del servidor.`,
       503
     );
+  }
+
+  // The monthly account allowance is reserved before any remote inference.
+  // Community-node token counts remain unbilled until independently trustworthy.
+  const requestId = randomUUID();
+  let quotaStore: ReturnType<typeof createQuotaStore> | null = null;
+  let quotaReserved = false;
+  let quotaFinalization: Promise<boolean> | null = null;
+  let dispatchAttempted = false;
+
+  const finalizeRequestQuota = (outcome: "unmetered" | "released"): Promise<boolean> => {
+    if (!accountId || !quotaStore || !quotaReserved) return Promise.resolve(false);
+    if (!quotaFinalization) {
+      quotaFinalization = (async () => {
+        try {
+          return outcome === "unmetered"
+            ? await quotaStore!.markRequestUnmetered(accountId, requestId)
+            : await quotaStore!.releaseUndispatchedRequest(accountId, requestId);
+        } catch {
+          // A stranded reservation expires after ten minutes and remains counted.
+          return false;
+        }
+      })();
+    }
+    return quotaFinalization;
+  };
+
+  if (accountId) {
+    try {
+      quotaStore = createQuotaStore(getIdentityPool());
+      const admission = await quotaStore.reserveChatRequest(accountId, model.id, requestId);
+      if (!admission.ok) {
+        await releaseReservation();
+        if (admission.reason === "account_inactive") {
+          return error("La cuenta ya no está activa. Inicia sesión de nuevo.", 401);
+        }
+        if (admission.reason === "limit_not_configured") {
+          return error("Tu cuenta no tiene un límite mensual configurado. No se inició la inferencia.", 503);
+        }
+        const retryAfterSeconds = Math.max(1, Math.ceil(
+          (Date.parse(admission.usage.periodEndsAt) - Date.now()) / 1000
+        ));
+        return Response.json({
+          error: "Has alcanzado el límite mensual de solicitudes de tu cuenta.",
+          usage: admission.usage
+        }, {
+          status: 429,
+          headers: { "Cache-Control": "no-store", "Retry-After": String(retryAfterSeconds) }
+        });
+      }
+      quotaReserved = true;
+    } catch {
+      await releaseReservation();
+      return error("No se pudo reservar el uso de esta cuenta. La inferencia no se inició.", 503);
+    }
   }
 
   const signal = AbortSignal.any([
@@ -258,7 +315,7 @@ export async function POST(request: NextRequest) {
       }
       const path = "/v1/node/infer";
       const requestBody = JSON.stringify({
-        requestId: randomUUID(),
+        requestId,
         modelId: model.id,
         messages: cleanMessages
       });
@@ -269,6 +326,12 @@ export async function POST(request: NextRequest) {
         requestBody
       );
 
+      if (signal.aborted) {
+        await finalizeRequestQuota("released");
+        await releaseReservation();
+        return error("La solicitud se canceló antes de enviarse al nodo.", 499);
+      }
+      dispatchAttempted = true;
       upstream = await fetch(communityNodeEndpoint(activeCommunityConfig, path), {
         method: "POST",
         signal,
@@ -358,6 +421,7 @@ export async function POST(request: NextRequest) {
 
     if (!upstream.ok) {
       const detail = (await upstream.text()).slice(0, 700);
+      await finalizeRequestQuota("unmetered");
       await releaseReservation();
       return error(
         `Error de ${model.provider} (${upstream.status}): ${detail}`,
@@ -365,6 +429,7 @@ export async function POST(request: NextRequest) {
       );
     }
     if (!upstream.body) {
+      await finalizeRequestQuota("unmetered");
       await releaseReservation();
       return error("El proveedor no devolvió un flujo de respuesta.", 502);
     }
@@ -406,12 +471,14 @@ export async function POST(request: NextRequest) {
           controller.error(new Error("La conexión con el proveedor se interrumpió."));
         } finally {
           reader.releaseLock();
+          await finalizeRequestQuota("unmetered");
           await releaseReservation();
         }
       },
-      cancel() {
-        reader.cancel().catch(() => {});
-        void releaseReservation();
+      async cancel() {
+        await reader.cancel().catch(() => {});
+        await finalizeRequestQuota("unmetered");
+        await releaseReservation();
       }
     });
 
@@ -423,6 +490,7 @@ export async function POST(request: NextRequest) {
       }
     });
   } catch (err) {
+    await finalizeRequestQuota(dispatchAttempted ? "unmetered" : "released");
     await releaseReservation();
     if (err instanceof Error && err.name === "TimeoutError") {
       return error("El proveedor tardó demasiado en responder. Inténtalo de nuevo.", 504);

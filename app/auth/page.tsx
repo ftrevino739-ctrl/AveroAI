@@ -5,6 +5,14 @@ import { useRouter } from "next/navigation";
 import "./auth.css";
 
 type Account = { id: string; email: string };
+type RequestUsage = {
+  policyVersion: string;
+  usedRequests: number;
+  maxRequests: number;
+  remainingRequests: number;
+  periodStartsAt: string;
+  periodEndsAt: string;
+};
 
 function readCookie(name: string): string {
   const prefix = name + "=";
@@ -21,6 +29,10 @@ export default function AuthPage() {
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [checking, setChecking] = useState(true);
+  const [usage, setUsage] = useState<RequestUsage | null>(null);
+  const [usageConfigured, setUsageConfigured] = useState(false);
+  const [usageLoading, setUsageLoading] = useState(false);
+  const [usageError, setUsageError] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -41,6 +53,31 @@ export default function AuthPage() {
       .finally(() => { if (active) setChecking(false); });
     return () => { active = false; };
   }, []);
+
+  useEffect(() => {
+    if (!account) {
+      setUsage(null);
+      setUsageConfigured(false);
+      setUsageError("");
+      return;
+    }
+    let active = true;
+    setUsageLoading(true);
+    setUsageError("");
+    fetch("/api/account/usage", { cache: "no-store" })
+      .then(async (response) => {
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || "No se pudo consultar el uso.");
+        if (!active) return;
+        setUsageConfigured(Boolean(data.configured));
+        setUsage(data.requests || null);
+      })
+      .catch((reason) => {
+        if (active) setUsageError(reason instanceof Error ? reason.message : "No se pudo consultar el uso.");
+      })
+      .finally(() => { if (active) setUsageLoading(false); });
+    return () => { active = false; };
+  }, [account]);
 
   async function requestLink(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -120,6 +157,29 @@ export default function AuthPage() {
             <div><strong>Sesión activa</strong><span>{account.email}</span></div>
             <button type="button" onClick={logout} disabled={busy}>{busy ? "Cerrando…" : "Cerrar sesión"}</button>
             <a className="auth-primary" href="/">Volver al chat</a>
+            <section className="auth-usage">
+              <div className="auth-usage-heading">
+                <strong>Uso mensual</strong>
+                <span>{usageLoading ? "Actualizando…" : usageConfigured && usage ? `${usage.remainingRequests} restantes` : "Cuenta"}</span>
+              </div>
+              {usageLoading ? <p className="auth-usage-muted">Consultando tu límite de solicitudes…</p> :
+                usageError ? <p className="auth-usage-muted">{usageError}</p> :
+                usageConfigured && usage ? (
+                  <>
+                    <div className="auth-usage-count">
+                      <strong>{usage.usedRequests}</strong>
+                      <span>de {usage.maxRequests} solicitudes</span>
+                    </div>
+                    <div className="auth-usage-track">
+                      <i style={{ width: `${Math.min(100, Math.round(usage.usedRequests / Math.max(1, usage.maxRequests) * 100))}%` }} />
+                    </div>
+                    <small>El periodo se renueva el {new Date(usage.periodEndsAt).toLocaleDateString("es-MX", { day: "numeric", month: "long", year: "numeric" })}.</small>
+                  </>
+                ) : (
+                  <p className="auth-usage-muted">El límite mensual aún no está configurado. El chat permanecerá bloqueado hasta establecer un tope finito.</p>
+                )}
+              <p className="auth-usage-footnote">La medición fiable de tokens y los créditos están deshabilitados; no se realizan cargos estimados.</p>
+            </section>
           </div>
         ) : token ? (
           <div className="auth-verify">
