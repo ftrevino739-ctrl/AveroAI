@@ -26,14 +26,15 @@ Contrato completo de producto y criterios de aceptación: [End-user installation
 
 ## Requisitos e instalación
 
-Requiere Node.js 20.9 o superior. Para probar solo el chat existente, configura una API key de proveedor en el servidor. Para probar la ruta comunitaria, configura un Provider Node remoto siguiendo la sección correspondiente; los usuarios finales no necesitan API keys.
+Requiere Node.js 20.9 o superior únicamente para desarrollo local. Para revisar la interfaz, el usuario final solo necesita abrir la vista previa web; no necesita instalar nada ni proporcionar API keys.
 
+Para desarrollo local:
 1. Clona el repositorio.
 2. Ejecuta `npm install`.
 3. Copia `.env.example` como `.env.local`.
-4. Configura un proveedor autorizado o la conexión al nodo comunitario.
-5. Ejecuta `npm run dev`.
-6. Abre `http://localhost:3000`.
+4. Ejecuta `npm run dev` y abre `http://localhost:3000`.
+
+La interfaz puede revisarse sin una GPU, pero la inferencia real no estará disponible hasta provisionar PostgreSQL, Redis, SMTP y el origen HTTPS, registrar un Provider Node remoto, conectar un runtime compatible y aprobar al menos un modelo exacto. No configures claves personales de OpenAI, Anthropic, Gemini u otros servicios como sustituto: el camino público de inferencia está limitado a nodos comunitarios aprobados.
 
 ## Variables de entorno
 
@@ -96,7 +97,11 @@ La plataforma puede añadir al selector el modelo configurado en el servidor med
 
 Configuración, comandos y límites técnicos: [Provider Node README](provider-node/README.md). Protocolo: [Provider Node Protocol v1](docs/architecture/PROVIDER-NODE-PROTOCOL.md).
 
-**Límite actual:** el registro y el scheduler multi-nodo inicial ya existen, pero faltan pruebas con Redis y GPU reales, cola distribuida, reintentos controlados, ledger de créditos, autenticación de usuarios, cuotas persistentes y revisión de seguridad. Las rutas de cuenta y su interfaz están implementadas detrás de configuración privada. Requieren PostgreSQL administrado, Redis persistente, SMTP con remitente/dominio verificado y `AVEIRO_AUTH_ORIGIN` HTTPS. Esas dependencias aún no se han provisionado, así que el acceso por correo no está activo en el despliegue actual. La conexión remota requiere HTTPS y restricción de acceso de red; el Provider Node por sí solo no termina TLS. No habilites nodos comunitarios públicos o no confiables todavía.
+**Estado actual:** ya están implementados y cubiertos por CI el registro privado de nodos, heartbeat firmado, scheduler inicial, cuentas por enlace mágico, sesiones Redis con CSRF, cuotas mensuales persistentes por cuenta, panel de uso, endpoint de readiness y telemetría de tokens firmada y no facturable. El despliegue Preview de Vercel está publicado, pero el indicador `Ready` solo confirma que Vercel creó el deployment; no demuestra que PostgreSQL, Redis, SMTP o una GPU estén configurados y disponibles.
+
+**Lo que falta para probar inferencia real:** provisionar PostgreSQL y Redis persistentes; configurar SMTP con remitente verificado y `AVEIRO_AUTH_ORIGIN` HTTPS; aplicar las migraciones `0001` y `0002`; registrar un Provider Node remoto con HTTPS y restricciones de red; conectar un runtime compatible con un checkpoint y licencia revisados; aprobar el ID exacto del modelo y comprobar una conversación real de extremo a extremo. Sin un nodo aprobado y listo, el selector debe permanecer vacío y el chat debe responder que el modelo no está disponible.
+
+**Pendiente de producto/operación:** cola durable y reintentos controlados entre nodos, sincronización cloud del historial, medición de tokens independiente del operador, implementación de cargos/créditos y revisión de seguridad independiente. El reporte HMAC de tokens actual es autorreportado por el operador y no sirve para facturación. El esquema de ledger existe, pero no hay cobros ni recompensas habilitados. Mantén deshabilitado el acceso público de operadores hasta completar la revisión.
 
 ## Cuentas: base de persistencia
 
