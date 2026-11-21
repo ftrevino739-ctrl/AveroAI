@@ -50,6 +50,7 @@ Requiere Node.js 20.9 o superior. Para probar solo el chat existente, configura 
 | `APP_URL` | URL pública de Aveiro; se envía como metadato a OpenRouter |
 | `AVEIRO_DATABASE_URL` | PostgreSQL durable para cuentas; solo servidor y TLS obligatorio en producción |
 | `AVEIRO_DATABASE_SSL` | Configura `require` para exigir TLS en el cliente PostgreSQL |
+| `AVEIRO_DEFAULT_REQUESTS_PER_MONTH` | Límite mensual finito de solicitudes para cuentas sin un plan explícito; no habilita facturación por tokens |
 | `AVEIRO_AUTH_ORIGIN` | Origen HTTPS canónico para los enlaces de acceso y validación de Origin |
 | `AVEIRO_SMTP_HOST` / `AVEIRO_SMTP_PORT` | Servidor SMTP de correo; 465 usa TLS directo y otros puertos requieren STARTTLS |
 | `AVEIRO_SMTP_USER` / `AVEIRO_SMTP_PASS` | Credenciales SMTP privadas del servidor |
@@ -103,7 +104,7 @@ Se añadió un adaptador PostgreSQL de conexión perezosa y una capa transaccion
 
 Se añadieron rutas para solicitar y verificar enlaces, consultar la sesión y cerrarla, junto con entrega SMTP genérica. El token viaja en el fragmento del navegador y requiere una confirmación explícita; las sesiones usan cookies host-only `__Host-` y CSRF doble ligado a Redis. Las rutas fallan de forma cerrada si faltan PostgreSQL, Redis, origen canónico o SMTP. Aún falta provisionar esos servicios reales para activar el acceso en el despliegue. El usuario final seguirá entrando únicamente desde el navegador y nunca necesitará API keys.
 
-En producción, el gateway de chat requiere una sesión activa y una prueba CSRF válida; Vercel Preview conserva el modo de revisión. La identidad del usuario nunca se reenvía al Provider Node. Las cuotas por cuenta y la medición autoritativa de tokens siguen pendientes.
+En producción, el gateway de chat requiere una sesión activa y una prueba CSRF válida; Vercel Preview conserva el modo de revisión. La identidad del usuario nunca se reenvía al Provider Node. El límite mensual de solicitudes por cuenta se reserva y cuenta de forma transaccional en PostgreSQL. La medición autoritativa de tokens y los créditos siguen deshabilitados; una solicitud ejecutada consume una unidad de solicitud, pero no genera cargos ni recompensas.
 
 ## Comandos
 
@@ -112,6 +113,7 @@ En producción, el gateway de chat requiere una sesión activa y una prueba CSRF
 - `npm run lint` — ESLint.
 - `npm run test:provider-node` — pruebas del protocolo y streaming del nodo.
 - `npm run test:identity-store` — pruebas PostgreSQL de identidad (requiere `AVEIRO_DATABASE_URL`).
+- `npm run test:quota-store` — pruebas PostgreSQL de cuotas concurrentes (requiere `AVEIRO_DATABASE_URL`).
 - `npm run test:session-store` — pruebas de sesiones Redis y CSRF usando un almacén simulado.
 - `npm run test:auth-security` — pruebas del origen canónico, cookies y construcción de enlaces.
 - `npm run build` — compilación de producción.
@@ -137,6 +139,7 @@ Si el modelo elegido no está disponible, Aveiro debe informar la indisponibilid
 - `lib/community-node.ts`: configuración server-side y firma de solicitudes del nodo.
 - `lib/postgres.ts` y `lib/identity-store.ts`: conexión PostgreSQL perezosa y primitivas transaccionales de enlaces mágicos.
 - `lib/session-store.ts`: sesiones Redis opacas, CSRF ligado a sesión, revocación y expiraciones.
+- `lib/quota-store.ts`: admisión transaccional de solicitudes por cuenta y periodo UTC mensual; sin estimar tokens.
 - `lib/mail.ts`: adaptador SMTP genérico para enlaces de un solo uso.
 - `lib/auth-security.ts`: origen canónico, cookies host-only y validación CSRF.
 - `app/auth/page.tsx`: interfaz browser-only de solicitud y confirmación de acceso.

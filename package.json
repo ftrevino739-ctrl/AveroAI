@@ -11,7 +11,8 @@
     "test:provider-node": "node --test provider-node/*.test.mjs",
     "test:identity-store": "tsx --test lib/identity-store.test.ts",
     "test:session-store": "tsx --test lib/session-store.test.ts",
-    "test:auth-security": "tsx --test lib/auth-security.test.ts lib/mail.test.ts"
+    "test:auth-security": "tsx --test lib/auth-security.test.ts lib/mail.test.ts",
+    "test:quota-store": "tsx --test lib/quota-store.test.ts"
   },
   "dependencies": {
     "next": "15.5.29",
