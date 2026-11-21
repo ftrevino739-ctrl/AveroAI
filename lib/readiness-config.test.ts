@@ -48,10 +48,12 @@ test("rejects insecure production origin/database transport and unlimited caps",
 });
 
 test("allows loopback HTTP and local PostgreSQL during development", () => {
-  const env = validEnv();
-  env.NODE_ENV = "development";
-  env.AVEIRO_AUTH_ORIGIN = "http://localhost:3000";
-  env.AVEIRO_DATABASE_URL = "postgresql://aveiro:db-pass@localhost:5432/aveiro";
-  env.AVEIRO_DATABASE_SSL = "";
+  const env = {
+    ...validEnv(),
+    NODE_ENV: "development",
+    AVEIRO_AUTH_ORIGIN: "http://localhost:3000",
+    AVEIRO_DATABASE_URL: "postgresql://aveiro:db-pass@localhost:5432/aveiro",
+    AVEIRO_DATABASE_SSL: ""
+  } as NodeJS.ProcessEnv;
   assert.deepEqual(getReadinessConfigurationIssues(env), []);
 });
