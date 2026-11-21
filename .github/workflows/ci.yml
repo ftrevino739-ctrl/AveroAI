@@ -10,13 +10,50 @@ concurrency:
 jobs:
   quality:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: averoai_test
+          POSTGRES_USER: averoai
+          POSTGRES_PASSWORD: ci-only-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U averoai -d averoai_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Apply and verify PostgreSQL identity schema
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-client
+          PGPASSWORD=ci-only-password psql -h 127.0.0.1 -U averoai -d averoai_test -v ON_ERROR_STOP=1 -f db/migrations/0001_identity_and_usage.sql
+          PGPASSWORD=ci-only-password psql -h 127.0.0.1 -U averoai -d averoai_test -v ON_ERROR_STOP=1 -c "SELECT to_regclass('public.app_users'), to_regclass('public.email_verification_tokens'), to_regclass('public.account_limits'), to_regclass('public.usage_reservations'), to_regclass('public.usage_ledger');"
+          PGPASSWORD=ci-only-password psql -h 127.0.0.1 -U averoai -d averoai_test -v ON_ERROR_STOP=1 -c "SELECT tgname FROM pg_trigger WHERE tgrelid = 'public.usage_ledger'::regclass AND NOT tgisinternal;"
+          PGPASSWORD=ci-only-password psql -h 127.0.0.1 -U averoai -d averoai_test -v ON_ERROR_STOP=1 -f db/tests/0001_identity_and_usage.test.sql
       - run: npm install
+      - name: Test durable magic-link identity storage
+        run: npm run test:identity-store
+        env:
+          AVEIRO_DATABASE_URL: postgresql://averoai:ci-only-password@127.0.0.1:5432/averoai_test
+      - name: Test durable account request quotas
+        run: npm run test:quota-store
+        env:
+          AVEIRO_DATABASE_URL: postgresql://averoai:ci-only-password@127.0.0.1:5432/averoai_test
+      - name: Test Redis-backed opaque sessions
+        run: npm run test:session-store
+      - name: Test authentication security and link construction
+        run: npm run test:auth-security
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
       - run: npm run typecheck
       - run: npm run lint
+      - run: npm run test:provider-node
       - run: npm run build
       - run: docker build -t averoai:ci .
