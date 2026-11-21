@@ -72,7 +72,7 @@ test("expires abandoned reservations and rejects inactive or unconfigured accoun
   if (!first.ok) return;
 
   await active.pool.query(
-    "UPDATE usage_reservations SET expires_at = now() - interval '1 second' WHERE request_id = $1",
+    "UPDATE usage_reservations SET created_at = now() - interval '2 hours', expires_at = now() - interval '1 second' WHERE request_id = $1",
     [first.requestId]
   );
   const afterExpiry = await quotas.reserveChatRequest(active.userId, "community/test-model");
