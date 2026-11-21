@@ -62,6 +62,7 @@ Optional environment variables:
 | `LOCAL_INFERENCE_API_KEY` | empty | Optional key used only to authenticate to the local inference runtime. It is not an Aveiro or third-party hosted API key. |
 | `AVEIRO_NODE_MAX_CONCURRENT` | `1` | Maximum concurrent inference jobs, from 1 to 32. |
 | `AVEIRO_NODE_REQUEST_TIMEOUT_MS` | `120000` | Per-job timeout, from 10,000 to 600,000 ms. |
+| `AVEIRO_NODE_USAGE_REPORTING` | `false` | Set to `true` only when the local runtime supports `stream_options.include_usage`; reports remain self-reported telemetry and never enable billing. |
 | `PORT` | `8787` | HTTP listen port. |
 | `AVEIRO_CONTROL_PLANE_URL` | empty | Aveiro HTTPS origin. When set, the node sends signed readiness heartbeats every 30 seconds. HTTP is allowed only for loopback development. |
 | `AVEIRO_HEARTBEAT_INTERVAL_MS` | `30000` | Heartbeat interval, from 10,000 to 120,000 ms.

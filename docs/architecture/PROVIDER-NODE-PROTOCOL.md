@@ -101,7 +101,7 @@ Constraints:
 - Raw request size is limited to 100,000 bytes.
 - The node enforces a maximum number of concurrent jobs and a per-job timeout.
 
-Successful responses stream the local runtime's Server-Sent Events body using text/event-stream. The node forwards original chunks and observes only the standard final `usage.prompt_tokens` / `usage.completion_tokens` metadata when the runtime returns it. The upstream request asks for `stream_options.include_usage`. When counts are present, the node appends one `event: aveiro.usage` envelope, signed with that node's HMAC secret and bound to the exact request ID, node ID and model ID. The envelope contains no prompt or user identity. Missing usage metadata is allowed and produces no report. The upstream request sent to the loopback runtime has the OpenAI-compatible shape:
+Successful responses stream the local runtime's Server-Sent Events body using text/event-stream. The node forwards original chunks and observes only the standard final `usage.prompt_tokens` / `usage.completion_tokens` metadata when the runtime returns it. When the provider operator explicitly enables `AVEIRO_NODE_USAGE_REPORTING=true` for a compatible runtime, the upstream request asks for `stream_options.include_usage`. The option is disabled by default so runtimes without that extension continue to work normally. When counts are present, the node appends one `event: aveiro.usage` envelope, signed with that node's HMAC secret and bound to the exact request ID, node ID and model ID. The envelope contains no prompt or user identity. Missing usage metadata is allowed and produces no report. The upstream request sent to the loopback runtime has the OpenAI-compatible shape:
 
 ~~~json
 {

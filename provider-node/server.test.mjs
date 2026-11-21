@@ -25,7 +25,7 @@ function close(server) {
   });
 }
 
-async function fixture(t) {
+async function fixture(t, options = {}) {
   let upstreamCalls = 0;
   let receivedJob = null;
 
@@ -59,7 +59,8 @@ async function fixture(t) {
     upstreamBaseUrl: `http://127.0.0.1:${upstreamPort}/v1`,
     maxConcurrent: 2,
     requestTimeoutMs: 10_000,
-    port: 8787
+    port: 8787,
+    usageReporting: options.usageReporting !== false
   });
   const nodePort = await listen(node);
   const baseUrl = `http://127.0.0.1:${nodePort}`;
@@ -216,6 +217,23 @@ test("streams an approved model response from the local inference runtime", asyn
     stream_options: { include_usage: true }
   });
   assert.equal(f.upstreamCalls, 1);
+});
+
+test("does not request or append usage metadata when reporting is disabled", async (t) => {
+  const f = await fixture(t, { usageReporting: false });
+  const response = await f.signedRequest("/v1/node/infer", "POST", {
+    requestId: "req-no-usage",
+    modelId: "community/test-model",
+    messages: [{ role: "user", content: "hello" }]
+  });
+  assert.equal(response.status, 200);
+  const body = await response.text();
+  assert.doesNotMatch(body, /event: aveiro\\.usage/);
+  assert.deepEqual(f.receivedJob, {
+    model: "community/test-model",
+    messages: [{ role: "user", content: "hello" }],
+    stream: true
+  });
 });
 
 test("reports only approved models actually advertised by the inference runtime", async (t) => {

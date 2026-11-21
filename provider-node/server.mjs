@@ -155,6 +155,7 @@ function validateConfig(config) {
     maxConcurrent,
     requestTimeoutMs,
     port,
+    usageReporting: config.usageReporting === true,
     maxBodyBytes: 100_000
   };
 }
@@ -177,7 +178,8 @@ export function loadConfig(env = process.env) {
     localApiKey: env.LOCAL_INFERENCE_API_KEY || "",
     maxConcurrent: env.AVEIRO_NODE_MAX_CONCURRENT || "1",
     requestTimeoutMs: env.AVEIRO_NODE_REQUEST_TIMEOUT_MS || "120000",
-    port: env.PORT || "8787"
+    port: env.PORT || "8787",
+    usageReporting: String(env.AVEIRO_NODE_USAGE_REPORTING || "").toLowerCase() === "true"
   });
 }
 
@@ -378,7 +380,7 @@ export function createProviderNodeServer(inputConfig) {
           model: job.modelId,
           messages: job.messages,
           stream: true,
-          stream_options: { include_usage: true }
+          ...(config.usageReporting ? { stream_options: { include_usage: true } } : {})
         })
       });
 
@@ -439,7 +441,7 @@ export function createProviderNodeServer(inputConfig) {
       sseBuffer += usageDecoder.decode();
       if (sseBuffer.trim()) inspectRuntimeUsageLine(sseBuffer);
 
-      if (!res.destroyed && !res.writableEnded && runtimeUsage) {
+      if (!res.destroyed && !res.writableEnded && runtimeUsage && config.usageReporting) {
         const report = {
           protocolVersion: 1,
           type: "aveiro_usage_report",
