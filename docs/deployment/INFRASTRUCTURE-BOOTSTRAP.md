@@ -2,7 +2,7 @@
 
 **Target:** a private staging deployment of the Next.js web application and its Redis-backed provider control plane.  
 **User experience:** browser-only. End users install nothing and never receive provider or infrastructure credentials.  
-**Current state:** deployment configuration and readiness checks are in the repository; no Vercel project, Upstash database, production domain, secrets or GPU provider have been provisioned yet.
+**Current state:** deployment configuration, browser authentication, monthly request quotas and provider-usage telemetry are implemented in the repository. No managed PostgreSQL, Upstash database, SMTP sender/domain, production domain, secrets or GPU provider have been provisioned yet.
 
 ## 1. Initial infrastructure layout
 
@@ -65,11 +65,20 @@ Copy these values directly into the hosting provider's private Environment Varia
 | `AVEIRO_NODE_SECRET_ENCRYPTION_KEY` | Generated 64-character hexadecimal key |
 | `AVEIRO_ADMIN_TOKEN` | Separately generated 64-character hexadecimal admin bearer token |
 | `AVEIRO_APPROVED_COMMUNITY_MODELS` | Leave empty until a specific checkpoint and licence have been reviewed |
+| `AVEIRO_DATABASE_URL` | Managed PostgreSQL URL with a database name and TLS (`sslmode=require` or `verify-full`) |
+| `AVEIRO_DATABASE_SSL` | Set to `require` to force TLS in the PostgreSQL client |
+| `AVEIRO_AUTH_ORIGIN` | Exact public HTTPS origin for the deployed web app (no path) |
+| `AVEIRO_SMTP_HOST` / `AVEIRO_SMTP_PORT` | SMTP host and port from an organization-controlled mail provider |
+| `AVEIRO_SMTP_USER` / `AVEIRO_SMTP_PASS` | Private SMTP credentials |
+| `AVEIRO_SMTP_FROM` | Sender address on a verified domain controlled by Aveiro |
+| `AVEIRO_DEFAULT_REQUESTS_PER_MONTH` | Finite monthly request cap for new accounts (1–1,000,000) |
 | `APP_URL` | Set to the final preview URL after the first deploy |
 
-5. Leave all AI provider API keys empty until Aveiro has its own authorized provider account and budget. The registry can be smoke-tested without an inference provider.
-6. Keep the Preview and Production environment variables separate. Create a distinct Upstash database and distinct encryption/admin secrets for Production; never point two environments at the same registry database.
-7. Redeploy after setting or changing environment variables.
+5. Create the PostgreSQL database and apply `db/migrations/0001_identity_and_usage.sql` followed by `db/migrations/0002_provider_usage_reports.sql` exactly once, using the managed database SQL console or a trusted PostgreSQL client. Keep both migration files under version control.
+6. Configure an organization-controlled SMTP account and verify its sender domain before requesting live magic links. `/api/ready` validates SMTP settings but does not send a test email or prove sender-domain reputation.
+7. Leave all AI provider API keys empty until Aveiro has its own authorized provider account and budget. The registry can be smoke-tested without an inference provider.
+8. Keep Preview and Production variables separate. Create distinct PostgreSQL and Upstash databases and distinct encryption/admin secrets for Production; never share state or keys between environments.
+9. Redeploy after setting or changing environment variables.
 
 Vercel's Hobby plan is limited to personal, non-commercial use. It is appropriate only for private development/testing that meets those terms. Before Aveiro becomes a commercial/public product, choose a plan/host whose terms permit that use. Vercel lists Pro at $20 USD/month before applicable taxes and usage. Review the [Vercel pricing page](https://vercel.com/pricing) and [Hobby terms](https://vercel.com/legal/terms) before choosing. Do not silently treat a free personal plan as production hosting.
 
@@ -78,9 +87,9 @@ Vercel's Hobby plan is limited to personal, non-commercial use. It is appropriat
 After Vercel completes its first deployment, open these endpoints on the preview domain:
 
 - `/api/health` — liveness only; should return HTTP 200 and `status: "alive"`.
-- `/api/ready` — checks that all registry secret variables exist and the Redis REST `PING` succeeds. It should return HTTP 200 and `status: "ready"`.
+- `/api/ready` — validates registry secrets, PostgreSQL URL/TLS, SMTP configuration, exact HTTPS auth origin and finite monthly request cap; it then runs Redis `PING` and PostgreSQL `SELECT 1`. It returns HTTP 200 and `status: "ready"` only when both databases are reachable. SMTP is configuration-checked, not contacted.
 
-If `/api/health` works but `/api/ready` returns HTTP 503, the web app is running but registry storage is not ready. Check the environment variable names, redeploy, and verify the Upstash database/token. The readiness response never exposes credentials.
+If `/api/health` works but `/api/ready` returns HTTP 503, the web app is alive but required configuration or storage is unavailable. The `missing` field lists variable names only, never values. Check PostgreSQL URL/TLS, Redis credentials, SMTP settings, HTTPS origin and the finite monthly cap.
 
 A ready registry is not a ready inference network. With `AVEIRO_APPROVED_COMMUNITY_MODELS` empty and no provider GPU connected, the model picker must not advertise community models. This is intentional.
 
@@ -91,7 +100,9 @@ This bootstrap does not create or claim:
 - a paid Vercel/Upstash account, a domain, or a deployed production service;
 - a real GPU node, model weights or inference capacity;
 - a reviewed model licence or an enabled community model;
-- public user accounts, durable chat history, user quotas, billing or credits;
+- live magic-link access until managed PostgreSQL, SMTP and the canonical HTTPS origin are provisioned;
+- cloud-synced chat history (history remains browser-local);
+- financial-grade token metering, billing, credits or provider rewards (node-reported counts are signed telemetry only);
 - production SLA, independent security review or end-to-end prompt confidentiality.
 
 Do not add a provider node or set `AVEIRO_APPROVED_COMMUNITY_MODELS` until an exact checkpoint, model licence, commercial-use terms, runtime compatibility and the provider's privacy/security controls have been reviewed. A provider operator can technically inspect prompts processed on their node.
@@ -105,13 +116,19 @@ Do not add a provider node or set `AVEIRO_APPROVED_COMMUNITY_MODELS` until an ex
 - Do not enable public provider enrollment. Node registration remains an administrator-only action and should be limited to invited providers until security review is complete.
 - Do not expose the Provider Node HTTP port publicly. Provider endpoints need HTTPS and network-level ingress restrictions so only the Aveiro control plane can reach them.
 
-## 8. Dependency security gate
+## 8. Account services and database migrations
+
+Account access uses one-time magic links delivered through SMTP. Sessions use host-only HttpOnly/Secure cookies and Redis-bound CSRF tokens. Apply PostgreSQL migrations in ascending order before deploying account routes. Migration 0001 creates identity, monthly request quota, reservation and append-only credit-ledger structures; migration 0002 stores append-only provider-self-reported token telemetry. Provider reports do not debit credits.
+
+`AVEIRO_DEFAULT_REQUESTS_PER_MONTH` must be a finite positive integer. New accounts without an explicit `account_limits` row receive this monthly request-only cap. Chat reserves one request in PostgreSQL before remote dispatch. Token billing and provider rewards remain disabled until independent node attestation or an equivalent trust mechanism exists.
+
+## 9. Dependency security gate
 
 The build pins the Next.js 15.5 line to `15.5.29` and keeps the compatible React release at `19.1.10`. The dependency tree previously included PostCSS `<=8.5.22` transitively through Next.js; this falls inside published PostCSS advisories. The project now forces the compatible patched PostCSS `8.5.32` through npm `overrides`. The GitHub Actions workflow runs `npm audit --omit=dev --audit-level=high` before type checking and blocks deployment-quality CI if a high-severity production dependency advisory remains. Review the [PostCSS security advisory](https://github.com/postcss/postcss/security/advisories/GHSA-fxqj-rqcc-2cmp) and keep this override under review as Next.js updates.
 
 The audit step covers production dependencies only. Development-tool advisories may still appear in the full `npm install` summary and should be reviewed separately; they do not get silently treated as fixed by this gate.
 
-## 9. Upgrade path
+## 10. Upgrade path
 
 For a private prototype, Vercel Preview + one Upstash Free database is sufficient to validate web deployment and Redis connectivity. Before inviting external users, review the hosting terms, upgrade to commercial-capable compute/storage as needed, establish spend alerts and rate limits, configure a production domain, and complete account security, authentication, retention, abuse and privacy work.
 

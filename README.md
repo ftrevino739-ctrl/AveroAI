@@ -116,6 +116,7 @@ En producción, el gateway de chat requiere una sesión activa y una prueba CSRF
 - `npm run test:quota-store` — pruebas PostgreSQL de cuotas concurrentes (requiere `AVEIRO_DATABASE_URL`).
 - `npm run test:session-store` — pruebas de sesiones Redis y CSRF usando un almacén simulado.
 - `npm run test:auth-security` — pruebas del origen canónico, cookies y construcción de enlaces.
+- `npm run test:readiness-config` — pruebas de configuración completa de producción.
 - `npm run build` — compilación de producción.
 - `npm start` — servidor de producción después de compilar.
 

@@ -1,6 +1,6 @@
 # Aveiro.ai — Community Compute Architecture
 
-**Status:** foundational design / implementation not yet complete  
+**Status:** first community-compute foundation implemented; external infrastructure, real GPU validation and production trust/security controls remain outstanding  
 **Repository:** AveroAI  
 **Target:** public, hosted multi-model AI platform with an independent community-compute network
 
@@ -53,7 +53,7 @@
 - Provider chooses which approved models to serve and when the node is online.
 - Node reports hardware/runtime/model availability and receives signed, scoped jobs.
 - Jobs run in an isolated runtime with resource limits, timeouts, egress restrictions and no access to host secrets.
-- Node returns streamed output and usage telemetry; it must not receive end-user account identity.
+- Node returns streamed output and optional HMAC-signed provider-self-reported usage telemetry; this is not a financial-grade meter. It must not receive end-user account identity.
 - Provider can pause, update, inspect, or uninstall at any time.
 - Never run arbitrary user-supplied code as part of inference.
 
@@ -92,9 +92,9 @@ If no eligible provider is online, return a clear capacity-unavailable message. 
 - Keep community models disabled until licensing and node execution are verified.
 
 ### Phase 2 — Single trusted provider prototype
-- Implement one provider node and one open-weight model with a verified license.
-- Run the node on a separately controlled GPU machine, not an end user's device.
-- Add heartbeat, capability registration, job dispatch, streaming and cancellation.
+- Provider Node protocol, signed registration heartbeat, exact-model scheduling and streaming dispatch are implemented.
+- Nodes can optionally report token counts exposed by a compatible runtime; HMAC authenticates the report source, not its honesty.
+- Still required: an invited operator's real GPU, one exact licence-reviewed checkpoint, an HTTPS-restricted endpoint and a live inference smoke test.
 - Test failure, malicious payload, timeout, node disconnect and prompt privacy boundaries.
 
 ### Phase 3 — Multi-node beta

@@ -228,7 +228,7 @@ test("does not request or append usage metadata when reporting is disabled", asy
   });
   assert.equal(response.status, 200);
   const body = await response.text();
-  assert.doesNotMatch(body, /event: aveiro\\.usage/);
+  assert.doesNotMatch(body, /event: aveiro\.usage/);
   assert.deepEqual(f.receivedJob, {
     model: "community/test-model",
     messages: [{ role: "user", content: "hello" }],

@@ -13,7 +13,8 @@
     "test:session-store": "tsx --test lib/session-store.test.ts",
     "test:auth-security": "tsx --test lib/auth-security.test.ts lib/mail.test.ts",
     "test:quota-store": "tsx --test lib/quota-store.test.ts",
-    "test:provider-usage": "tsx --test lib/provider-usage.test.ts lib/provider-usage-store.test.ts"
+    "test:provider-usage": "tsx --test lib/provider-usage.test.ts lib/provider-usage-store.test.ts",
+    "test:readiness-config": "tsx --test lib/readiness-config.test.ts"
   },
   "dependencies": {
     "next": "15.5.29",

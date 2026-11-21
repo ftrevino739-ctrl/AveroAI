@@ -56,6 +56,8 @@ jobs:
         run: npm run test:session-store
       - name: Test authentication security and link construction
         run: npm run test:auth-security
+      - name: Test complete runtime readiness configuration
+        run: npm run test:readiness-config
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
       - run: npm run typecheck

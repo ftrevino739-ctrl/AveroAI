@@ -1,36 +1,42 @@
+import { checkIdentityDatabase } from "@/lib/postgres";
 import { checkRegistryConnection } from "@/lib/provider-registry";
+import { getReadinessConfigurationIssues } from "@/lib/readiness-config";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const encryptionKey = process.env.AVEIRO_NODE_SECRET_ENCRYPTION_KEY || "";
-  const adminToken = process.env.AVEIRO_ADMIN_TOKEN || "";
-  const redisUrl = process.env.AVEIRO_REDIS_REST_URL || "";
-  const redisToken = process.env.AVEIRO_REDIS_REST_TOKEN || "";
-  if (
-    !redisUrl ||
-    !redisToken ||
-    !/^([a-f0-9]{64})$/i.test(encryptionKey) ||
-    adminToken.length < 32
-  ) {
-    return Response.json(
-      { service: "aveiro.ai", status: "not_ready", reason: "Infrastructure secrets are not configured." },
-      { status: 503, headers: { "Cache-Control": "no-store" } }
-    );
+  const missing = getReadinessConfigurationIssues();
+  if (missing.length > 0) {
+    return Response.json({
+      service: "aveiro.ai",
+      status: "not_ready",
+      reason: "Required infrastructure and account configuration is missing or invalid.",
+      missing
+    }, { status: 503, headers: { "Cache-Control": "no-store" } });
   }
 
   try {
-    const connected = await checkRegistryConnection();
-    if (!connected) throw new Error("Registry ping failed.");
-    return Response.json(
-      { service: "aveiro.ai", status: "ready", dependencies: { providerRegistry: "connected" } },
-      { headers: { "Cache-Control": "no-store" } }
-    );
+    const [registry, identityDatabase] = await Promise.all([
+      checkRegistryConnection(),
+      checkIdentityDatabase()
+    ]);
+    if (!registry || !identityDatabase) throw new Error("A required dependency is unavailable.");
+    return Response.json({
+      service: "aveiro.ai",
+      status: "ready",
+      dependencies: {
+        providerRegistry: "connected",
+        identityDatabase: "connected",
+        emailDeliveryConfiguration: "configured",
+        monthlyRequestQuota: "configured"
+      }
+    }, { headers: { "Cache-Control": "no-store" } });
   } catch {
-    return Response.json(
-      { service: "aveiro.ai", status: "not_ready", reason: "Provider registry is unavailable." },
-      { status: 503, headers: { "Cache-Control": "no-store" } }
-    );
+    return Response.json({
+      service: "aveiro.ai",
+      status: "not_ready",
+      reason: "A required database or provider-registry dependency is unavailable."
+    }, { status: 503, headers: { "Cache-Control": "no-store" } });
   }
 }
