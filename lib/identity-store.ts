@@ -27,11 +27,11 @@ async function inTransaction<T>(pool: Pool, operation: (client: PoolClient) => P
   }
 }
 
-function normalizeEmail(value: unknown): string | null {
+export function normalizeAccountEmail(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const email = value.trim().toLowerCase();
   if (Buffer.byteLength(email, "utf8") < 3 || Buffer.byteLength(email, "utf8") > 320 ||
-      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(email)) return null;
+      !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/u.test(email)) return null;
   return email;
 }
 
@@ -40,13 +40,14 @@ function tokenDigest(token: string): Buffer {
 }
 
 /**
- * Database primitives only. This module never sends email or creates browser
- * sessions. Raw tokens are returned once; only SHA-256 hashes are persisted.
+ * Database primitives only. Issue the same form of link for all syntactically
+ * valid addresses to avoid exposing account state through request-link responses.
+ * consumeMagicLink still rejects suspended and deleted accounts.
  */
 export function createIdentityStore(pool: Pool) {
   return {
     async createMagicLink(emailInput: unknown): Promise<MagicLink | null> {
-      const email = normalizeEmail(emailInput);
+      const email = normalizeAccountEmail(emailInput);
       if (!email) return null;
       const token = randomBytes(32).toString("base64url");
       const expiresAt = new Date(Date.now() + MAGIC_LINK_TTL_MS);
@@ -62,9 +63,8 @@ export function createIdentityStore(pool: Pool) {
           [email]
         );
         const user = userResult.rows[0];
-        if (!user || user.status === "suspended" || user.status === "deleted") return null;
+        if (!user) return null;
 
-        // Invalidate previous outstanding links so only the newest can be used.
         await client.query(
           "UPDATE email_verification_tokens SET consumed_at = now() " +
           "WHERE user_id = $1 AND consumed_at IS NULL",
@@ -83,7 +83,6 @@ export function createIdentityStore(pool: Pool) {
       if (typeof tokenInput !== "string" || !TOKEN_PATTERN.test(tokenInput)) return null;
       const digest = tokenDigest(tokenInput);
       return inTransaction(pool, async (client) => {
-        // One atomic UPDATE prevents concurrent redemptions across app instances.
         const result = await client.query<UserRow>(
           "UPDATE email_verification_tokens AS token SET consumed_at = now() " +
           "FROM app_users AS account WHERE token.user_id = account.id " +

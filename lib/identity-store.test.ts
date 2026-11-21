@@ -68,6 +68,8 @@ test("magic-link storage normalizes addresses, hashes tokens and consumes each l
     "INSERT INTO app_users (id, email, status) VALUES ($1, $2, 'suspended')",
     [randomUUID(), suspendedEmail]
   );
-  assert.equal(await store.createMagicLink(suspendedEmail), null);
+  const suspendedLink = await store.createMagicLink(suspendedEmail);
+  assert.ok(suspendedLink);
+  assert.equal(await store.consumeMagicLink(suspendedLink.token), null);
   assert.equal(await store.createMagicLink("not-an-email"), null);
 });

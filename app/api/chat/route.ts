@@ -1,4 +1,13 @@
 import { randomUUID } from "node:crypto";
+import { getIdentityPool } from "@/lib/postgres";
+import { createIdentityStore } from "@/lib/identity-store";
+import { sessionStore } from "@/lib/session-store";
+import {
+  SESSION_COOKIE_NAME,
+  CSRF_COOKIE_NAME,
+  constantTimeTextEquals,
+  getCanonicalAuthOrigin
+} from "@/lib/auth-security";
 import { NextRequest } from "next/server";
 import { models, type ProviderId, COMMUNITY_MODEL_PREFIX } from "@/lib/models";
 import { consumeChatRateLimit, reserveProviderNodeForModel, type ProviderNodeReservation } from "@/lib/provider-registry";
@@ -36,6 +45,58 @@ function error(message: string, status: number) {
   );
 }
 
+
+function accountAuthRequired(): boolean {
+  return process.env.AVEIRO_REQUIRE_AUTH === "true" ||
+    (process.env.NODE_ENV === "production" && process.env.VERCEL_ENV !== "preview");
+}
+
+async function requireAccountSession(request: NextRequest): Promise<Response | null> {
+  if (!accountAuthRequired()) return null;
+
+  let expectedOrigin: string;
+  try {
+    expectedOrigin = getCanonicalAuthOrigin();
+  } catch {
+    return error("El origen seguro de autenticación no está configurado.", 503);
+  }
+  if (request.headers.get("origin") !== expectedOrigin) {
+    return error("Origen no autorizado.", 403);
+  }
+
+  const sessionToken = request.cookies.get(SESSION_COOKIE_NAME)?.value;
+  if (!sessionToken) return error("Inicia sesión para continuar.", 401);
+
+  try {
+    const session = await sessionStore.getSession(sessionToken);
+    if (!session) return error("Tu sesión ha caducado. Inicia sesión de nuevo.", 401);
+
+    const csrfCookie = request.cookies.get(CSRF_COOKIE_NAME)?.value || null;
+    const csrfHeader = request.headers.get("x-aveiro-csrf");
+    if (!constantTimeTextEquals(csrfCookie, csrfHeader) ||
+        !await sessionStore.verifyCsrf(sessionToken, csrfHeader)) {
+      return error("La validación CSRF de la sesión no es válida.", 403);
+    }
+
+    const account = await createIdentityStore(getIdentityPool()).getActiveAccount(session.userId);
+    if (!account) {
+      await sessionStore.revokeSession(sessionToken);
+      return error("La cuenta no está activa. Inicia sesión de nuevo.", 401);
+    }
+
+    const accountLimit = await consumeChatRateLimit("auth-chat-account:" + account.id, 15, 60);
+    if (!accountLimit.allowed) {
+      return Response.json(
+        { error: "Has alcanzado el límite temporal de solicitudes de esta cuenta." },
+        { status: 429, headers: { "Cache-Control": "no-store", "Retry-After": String(accountLimit.retryAfterSeconds) } }
+      );
+    }
+    return null;
+  } catch {
+    return error("La autenticación no está disponible temporalmente.", 503);
+  }
+}
+
 export async function POST(request: NextRequest) {
   const forwarded = request.headers.get("x-real-ip") || request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
   let rateLimit: { allowed: boolean; remaining: number; retryAfterSeconds: number };
@@ -50,6 +111,9 @@ export async function POST(request: NextRequest) {
       { status: 429, headers: { "Cache-Control": "no-store", "Retry-After": String(rateLimit.retryAfterSeconds) } }
     );
   }
+
+  const authFailure = await requireAccountSession(request);
+  if (authFailure) return authFailure;
 
   let body: unknown;
   try {

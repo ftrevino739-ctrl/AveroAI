@@ -14,7 +14,7 @@ Aveiro.ai es una plataforma web multimodelo en desarrollo, con interfaz Liquid G
 - Prototipo de dispatch a un nodo remoto de Aveiro, autenticado con HMAC y sin API key del usuario.
 - Servicio independiente Provider Node con allowlist de modelos, límites, timeout y streaming.
 - Las credenciales del servidor no se exponen al navegador.
-- GitHub Actions comprueba dependencias de producción (npm audit, bloquea vulnerabilidades altas), tipos, lint, pruebas del nodo, integración de identidad con PostgreSQL, compilación de producción y build Docker.
+- GitHub Actions comprueba dependencias de producción (npm audit, bloquea vulnerabilidades altas), tipos, lint, pruebas del nodo, autenticación PostgreSQL/Redis, seguridad de origen y CSRF, compilación de producción y build Docker.
 
 ## Experiencia del usuario final: solo navegador
 
@@ -50,6 +50,11 @@ Requiere Node.js 20.9 o superior. Para probar solo el chat existente, configura 
 | `APP_URL` | URL pública de Aveiro; se envía como metadato a OpenRouter |
 | `AVEIRO_DATABASE_URL` | PostgreSQL durable para cuentas; solo servidor y TLS obligatorio en producción |
 | `AVEIRO_DATABASE_SSL` | Configura `require` para exigir TLS en el cliente PostgreSQL |
+| `AVEIRO_AUTH_ORIGIN` | Origen HTTPS canónico para los enlaces de acceso y validación de Origin |
+| `AVEIRO_SMTP_HOST` / `AVEIRO_SMTP_PORT` | Servidor SMTP de correo; 465 usa TLS directo y otros puertos requieren STARTTLS |
+| `AVEIRO_SMTP_USER` / `AVEIRO_SMTP_PASS` | Credenciales SMTP privadas del servidor |
+| `AVEIRO_SMTP_FROM` | Remitente verificado de correo de acceso |
+| `AVEIRO_REQUIRE_AUTH` | Fuerza el login en desarrollo; producción lo requiere por defecto (Vercel Preview queda como entorno de revisión) |
 | `AVEIRO_PROVIDER_NODE_URL` | URL HTTPS del Provider Node (HTTP solo en loopback para desarrollo) |
 | `AVEIRO_NODE_ID` | Identificador del nodo |
 | `AVEIRO_NODE_SECRET` | Secreto HMAC compartido entre el servidor de Aveiro y ese nodo |
@@ -90,15 +95,15 @@ La plataforma puede añadir al selector el modelo configurado en el servidor med
 
 Configuración, comandos y límites técnicos: [Provider Node README](provider-node/README.md). Protocolo: [Provider Node Protocol v1](docs/architecture/PROVIDER-NODE-PROTOCOL.md).
 
-**Límite actual:** el registro y el scheduler multi-nodo inicial ya existen, pero faltan pruebas con Redis y GPU reales, cola distribuida, reintentos controlados, ledger de créditos, autenticación de usuarios, cuotas persistentes y revisión de seguridad. La arquitectura de cuentas, login por enlace de correo, sesiones, CSRF, cuotas y ledger se especifica en [User Identity, Quotas and Credits](docs/architecture/USER-IDENTITY-QUOTAS-AND-CREDITS.md); es un contrato de implementación, no una función activa. Requiere PostgreSQL duradero, correo transaccional y dominio verificado, que todavía no están provisionados. La conexión remota requiere HTTPS y restricción de acceso de red; el Provider Node por sí solo no termina TLS. No habilites nodos comunitarios públicos o no confiables todavía.
+**Límite actual:** el registro y el scheduler multi-nodo inicial ya existen, pero faltan pruebas con Redis y GPU reales, cola distribuida, reintentos controlados, ledger de créditos, autenticación de usuarios, cuotas persistentes y revisión de seguridad. Las rutas de cuenta y su interfaz están implementadas detrás de configuración privada. Requieren PostgreSQL administrado, Redis persistente, SMTP con remitente/dominio verificado y `AVEIRO_AUTH_ORIGIN` HTTPS. Esas dependencias aún no se han provisionado, así que el acceso por correo no está activo en el despliegue actual. La conexión remota requiere HTTPS y restricción de acceso de red; el Provider Node por sí solo no termina TLS. No habilites nodos comunitarios públicos o no confiables todavía.
 
 ## Cuentas: base de persistencia
 
 Se añadió un adaptador PostgreSQL de conexión perezosa y una capa transaccional para emitir y consumir enlaces mágicos de un solo uso. El token se genera de forma criptográficamente aleatoria, solo se guarda su hash SHA-256, caduca a los 15 minutos y su consumo es atómico incluso ante dos redenciones simultáneas. El CI ejecuta pruebas de integración reales contra PostgreSQL 16.
 
-Esto todavía **no activa el inicio de sesión de usuarios**: no hay rutas HTTP de autenticación, entrega de correo ni cookies de sesión conectadas al navegador o al chat. No se simula el envío del correo ni se acepta inferencia de usuarios anónimos como producción. El usuario final seguirá entrando únicamente desde el navegador y nunca necesitará API keys.
+Se añadieron rutas para solicitar y verificar enlaces, consultar la sesión y cerrarla, junto con entrega SMTP genérica. El token viaja en el fragmento del navegador y requiere una confirmación explícita; las sesiones usan cookies host-only `__Host-` y CSRF doble ligado a Redis. Las rutas fallan de forma cerrada si faltan PostgreSQL, Redis, origen canónico o SMTP. Aún falta provisionar esos servicios reales para activar el acceso en el despliegue. El usuario final seguirá entrando únicamente desde el navegador y nunca necesitará API keys.
 
-El almacenamiento de sesión ya tiene primitivas Redis independientes: el navegador recibirá un token opaco pensado para una cookie HttpOnly/Secure, Redis conserva solo su hash, la caducidad por inactividad es de 24 horas y la absoluta de 7 días. Estas primitivas todavía no se exponen mediante rutas HTTP.
+En producción, el gateway de chat requiere una sesión activa y una prueba CSRF válida; Vercel Preview conserva el modo de revisión. La identidad del usuario nunca se reenvía al Provider Node. Las cuotas por cuenta y la medición autoritativa de tokens siguen pendientes.
 
 ## Comandos
 
@@ -107,7 +112,8 @@ El almacenamiento de sesión ya tiene primitivas Redis independientes: el navega
 - `npm run lint` — ESLint.
 - `npm run test:provider-node` — pruebas del protocolo y streaming del nodo.
 - `npm run test:identity-store` — pruebas PostgreSQL de identidad (requiere `AVEIRO_DATABASE_URL`).
-- `npm run test:session-store` — pruebas de sesiones Redis usando un almacén simulado.
+- `npm run test:session-store` — pruebas de sesiones Redis y CSRF usando un almacén simulado.
+- `npm run test:auth-security` — pruebas del origen canónico, cookies y construcción de enlaces.
 - `npm run build` — compilación de producción.
 - `npm start` — servidor de producción después de compilar.
 
@@ -130,7 +136,10 @@ Si el modelo elegido no está disponible, Aveiro debe informar la indisponibilid
 - `lib/models.ts`: modelos y tipos de proveedor.
 - `lib/community-node.ts`: configuración server-side y firma de solicitudes del nodo.
 - `lib/postgres.ts` y `lib/identity-store.ts`: conexión PostgreSQL perezosa y primitivas transaccionales de enlaces mágicos.
-- `lib/session-store.ts`: sesiones opacas Redis con hash de token, revocación, caducidad deslizante y límite absoluto.
+- `lib/session-store.ts`: sesiones Redis opacas, CSRF ligado a sesión, revocación y expiraciones.
+- `lib/mail.ts`: adaptador SMTP genérico para enlaces de un solo uso.
+- `lib/auth-security.ts`: origen canónico, cookies host-only y validación CSRF.
+- `app/auth/page.tsx`: interfaz browser-only de solicitud y confirmación de acceso.
 - `provider-node/`: servicio independiente para nodos de GPU.
 - `db/migrations/`: esquema PostgreSQL para cuentas, verificación de correo, límites, reservas y ledger append-only; se valida en CI con PostgreSQL 16, pero aún no está conectado a la aplicación.
 - `app/globals.css`: sistema visual Liquid Glass.

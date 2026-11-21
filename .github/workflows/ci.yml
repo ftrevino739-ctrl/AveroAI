@@ -44,6 +44,8 @@ jobs:
           AVEIRO_DATABASE_URL: postgresql://averoai:ci-only-password@127.0.0.1:5432/averoai_test
       - name: Test Redis-backed opaque sessions
         run: npm run test:session-store
+      - name: Test authentication security and link construction
+        run: npm run test:auth-security
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
       - run: npm run typecheck
