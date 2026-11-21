@@ -1,4 +1,5 @@
-export type ProviderId = "openai" | "anthropic" | "google" | "openrouter" | "custom";
+export const COMMUNITY_MODEL_PREFIX = "aveiro-community:";
+export type ProviderId = "openai" | "anthropic" | "google" | "openrouter" | "custom" | "community";
 export type ModelInfo = { id:string; name:string; provider:string; providerId:ProviderId; description:string; category:"Frontier"|"Fast"|"Open"; context:string };
 export const models: ModelInfo[] = [
   {id:"gpt-4o",name:"GPT-4o",provider:"OpenAI",providerId:"openai",description:"Versatile multimodal assistant",category:"Frontier",context:"128K"},
