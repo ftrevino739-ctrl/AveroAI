@@ -3,7 +3,7 @@ import { randomBytes } from "node:crypto";
 import { createServer } from "node:http";
 import test from "node:test";
 import { createProviderNodeServer } from "./server.mjs";
-import { createRequestSignature } from "./signing.mjs";
+import { createRequestSignature, createProviderUsageSignature } from "./signing.mjs";
 
 const NODE_ID = "test-node-01";
 const SECRET = "test-only-secret-that-is-longer-than-thirty-two-characters";
@@ -47,6 +47,7 @@ async function fixture(t) {
 
     res.writeHead(200, { "Content-Type": "text/event-stream" });
     res.write('data: {"choices":[{"delta":{"content":"hello"}}]}\n\n');
+    res.write('data: {"choices":[],"usage":{"prompt_tokens":7,"completion_tokens":3,"total_tokens":10}}\n\n');
     res.end("data: [DONE]\n\n");
   });
 
@@ -189,14 +190,30 @@ test("streams an approved model response from the local inference runtime", asyn
 
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") || "", /^text\/event-stream/);
-  assert.equal(
-    await response.text(),
-    'data: {"choices":[{"delta":{"content":"hello"}}]}\n\ndata: [DONE]\n\n'
-  );
+  const streamedBody = await response.text();
+  assert.ok(streamedBody.startsWith('data: {"choices":[{"delta":{"content":"hello"}}]}\n\n'));
+  assert.ok(streamedBody.includes("data: [DONE]\n\n"));
+  const usageBlock = streamedBody.split("\n\n").find((block) => block.startsWith("event: aveiro.usage"));
+  assert.ok(usageBlock, "provider node should append a usage event when the runtime reports usage");
+  const usageLine = usageBlock.split("\n").find((line) => line.startsWith("data: "));
+  assert.ok(usageLine);
+  const usageEnvelope = JSON.parse(usageLine.slice(6));
+  const { signature, ...unsignedUsage } = usageEnvelope;
+  assert.equal(signature, createProviderUsageSignature(unsignedUsage, SECRET));
+  assert.equal(unsignedUsage.protocolVersion, 1);
+  assert.equal(unsignedUsage.type, "aveiro_usage_report");
+  assert.equal(unsignedUsage.requestId, "req-stream");
+  assert.equal(unsignedUsage.nodeId, NODE_ID);
+  assert.equal(unsignedUsage.modelId, "community/test-model");
+  assert.equal(unsignedUsage.inputTokens, 7);
+  assert.equal(unsignedUsage.outputTokens, 3);
+  assert.equal(unsignedUsage.source, "openai_compatible_runtime");
+  assert.ok(Number.isSafeInteger(unsignedUsage.reportedAtMs));
   assert.deepEqual(f.receivedJob, {
     model: "community/test-model",
     messages: [{ role: "user", content: "hello" }],
-    stream: true
+    stream: true,
+    stream_options: { include_usage: true }
   });
   assert.equal(f.upstreamCalls, 1);
 });

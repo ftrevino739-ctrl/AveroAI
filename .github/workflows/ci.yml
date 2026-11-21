@@ -37,6 +37,8 @@ jobs:
           PGPASSWORD=ci-only-password psql -h 127.0.0.1 -U averoai -d averoai_test -v ON_ERROR_STOP=1 -c "SELECT to_regclass('public.app_users'), to_regclass('public.email_verification_tokens'), to_regclass('public.account_limits'), to_regclass('public.usage_reservations'), to_regclass('public.usage_ledger');"
           PGPASSWORD=ci-only-password psql -h 127.0.0.1 -U averoai -d averoai_test -v ON_ERROR_STOP=1 -c "SELECT tgname FROM pg_trigger WHERE tgrelid = 'public.usage_ledger'::regclass AND NOT tgisinternal;"
           PGPASSWORD=ci-only-password psql -h 127.0.0.1 -U averoai -d averoai_test -v ON_ERROR_STOP=1 -f db/tests/0001_identity_and_usage.test.sql
+          PGPASSWORD=ci-only-password psql -h 127.0.0.1 -U averoai -d averoai_test -v ON_ERROR_STOP=1 -f db/migrations/0002_provider_usage_reports.sql
+          PGPASSWORD=ci-only-password psql -h 127.0.0.1 -U averoai -d averoai_test -v ON_ERROR_STOP=1 -f db/tests/0002_provider_usage_reports.test.sql
       - run: npm install
       - name: Test durable magic-link identity storage
         run: npm run test:identity-store
@@ -44,6 +46,10 @@ jobs:
           AVEIRO_DATABASE_URL: postgresql://averoai:ci-only-password@127.0.0.1:5432/averoai_test
       - name: Test durable account request quotas
         run: npm run test:quota-store
+        env:
+          AVEIRO_DATABASE_URL: postgresql://averoai:ci-only-password@127.0.0.1:5432/averoai_test
+      - name: Test signed provider usage telemetry
+        run: npm run test:provider-usage
         env:
           AVEIRO_DATABASE_URL: postgresql://averoai:ci-only-password@127.0.0.1:5432/averoai_test
       - name: Test Redis-backed opaque sessions

@@ -1,6 +1,6 @@
 # Aveiro Provider Node Protocol v1
 
-**Status:** executable provider-node protocol with signed outbound registry heartbeat; chat scheduling is not yet connected to the registry.  
+**Status:** executable provider-node protocol with signed registry heartbeat, scheduler integration and a non-billable signed usage-report extension.  
 **Transport:** HTTPS is required outside a private development environment.  
 **Scope:** text-only inference through a provider's local OpenAI-compatible runtime.
 
@@ -101,13 +101,14 @@ Constraints:
 - Raw request size is limited to 100,000 bytes.
 - The node enforces a maximum number of concurrent jobs and a per-job timeout.
 
-Successful responses stream the local runtime's Server-Sent Events body using text/event-stream. The node forwards chunks without interpreting the model's content. The upstream request sent to the loopback runtime has the OpenAI-compatible shape:
+Successful responses stream the local runtime's Server-Sent Events body using text/event-stream. The node forwards original chunks and observes only the standard final `usage.prompt_tokens` / `usage.completion_tokens` metadata when the runtime returns it. The upstream request asks for `stream_options.include_usage`. When counts are present, the node appends one `event: aveiro.usage` envelope, signed with that node's HMAC secret and bound to the exact request ID, node ID and model ID. The envelope contains no prompt or user identity. Missing usage metadata is allowed and produces no report. The upstream request sent to the loopback runtime has the OpenAI-compatible shape:
 
 ~~~json
 {
   "model": "community/approved-model",
   "messages": [{ "role": "user", "content": "..." }],
-  "stream": true
+  "stream": true,
+  "stream_options": { "include_usage": true }
 }
 ~~~
 
@@ -129,11 +130,11 @@ The control plane must not silently send the request to another model or paid pr
 ## Deliberate v1 limitations
 
 - Central registration, admin revocation and signed readiness heartbeat are implemented, but dynamic registry nodes are not yet used by the chat scheduler.
-- No streaming cancellation acknowledgment or usage metering yet.
+- Usage telemetry is reported when the local runtime supplies final token counts. Reports are signed and bound to the exact request/node/model; the web gateway verifies the signature and stores them as `provider_self_reported` telemetry.
 - No image, audio, video or file payload support.
 - Nonces are stored in process memory; multi-process deployments need a shared replay store or sticky routing.
-- No automatic model licence verification or remote attestation.
+- A valid node signature authenticates the reporting node and protects the report in transit, but it is not remote attestation and does not prove the operator reported truthful counts. Provider-reported usage must not be used to debit user credits, issue provider rewards or settle money.
 - No claim that node operators cannot read prompts.
 - No public production readiness claim.
 
-Before routing public traffic to community nodes, the control plane must implement multi-node scheduling, signed job dispatch, TLS enforcement and ingress restrictions, streaming cancellation, auditable metering, abuse controls and security review. Registration and readiness heartbeats alone are not sufficient to admit a node to production inference.
+Before routing public traffic to community nodes, the control plane still needs independent node attestation or another operator-trust mechanism, TLS enforcement and ingress restrictions, durable job/cancellation semantics, abuse operations, public provider terms and an independent security review. Self-reported usage is not a financial-grade meter.

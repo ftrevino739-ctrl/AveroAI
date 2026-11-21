@@ -8,7 +8,7 @@ This is the first executable provider-node prototype for Aveiro Community Comput
 - Uses HMAC-SHA256 signatures, a short timestamp window and in-memory nonce replay protection.
 - Exposes only the exact model IDs in `AVEIRO_ALLOWED_MODELS`.
 - Forwards text-only chat requests to a local OpenAI-compatible inference runtime.
-- Streams the runtime's Server-Sent Events response back to the caller.
+- Streams the runtime's Server-Sent Events response back to the caller and appends a signed usage report when the runtime supplies final prompt/completion token counts.
 - Enforces request-size, message-count, message-size, timeout and concurrent-job limits.
 - Never receives the end user's account identity and never executes user-supplied code.
 
@@ -18,6 +18,7 @@ This is the first executable provider-node prototype for Aveiro Community Comput
 - It sends signed readiness heartbeats when `AVEIRO_CONTROL_PLANE_URL` is configured. The Aveiro catalogue and first-pass chat scheduler can select it only while the heartbeat is fresh, the exact model is approved and advertised, and a concurrency slot is available.
 - It does not download, install, or select model weights.
 - It does not verify a model licence automatically. An operator must approve the exact checkpoint and terms before allowing it.
+- Usage reports are provider-self-reported telemetry only. The shared HMAC proves which node reported the counts, not that an operator cannot falsify them. Reports are never used for credit debits, rewards or billing.
 - It does not provide TLS, user authentication, usage credits, billing, moderation, or a production abuse-control system.
 - It has not yet been tested against a real GPU or a real model runtime.
 

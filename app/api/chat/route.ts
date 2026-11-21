@@ -3,6 +3,8 @@ import { getIdentityPool } from "@/lib/postgres";
 import { createIdentityStore } from "@/lib/identity-store";
 import { sessionStore } from "@/lib/session-store";
 import { createQuotaStore } from "@/lib/quota-store";
+import { verifyProviderUsageReport } from "@/lib/provider-usage";
+import { recordProviderUsageReport } from "@/lib/provider-usage-store";
 import {
   SESSION_COOKIE_NAME,
   CSRF_COOKIE_NAME,
@@ -440,21 +442,55 @@ export async function POST(request: NextRequest) {
     const reader = upstream.body.getReader();
     const decoder = new TextDecoder();
     const encoder = new TextEncoder();
+    let providerUsageReport: ReturnType<typeof verifyProviderUsageReport> = null;
+    let usagePersisted = false;
+
+    const finalizeDispatchedUsage = async () => {
+      await finalizeRequestQuota("unmetered");
+      if (usagePersisted || !accountId || !providerUsageReport || !dynamicReservation) return;
+      usagePersisted = true;
+      try {
+        await recordProviderUsageReport(getIdentityPool(), providerUsageReport);
+      } catch {
+        // Usage telemetry is non-billable. A telemetry outage must not break the reply.
+      }
+    };
+
     const stream = new ReadableStream<Uint8Array>({
       async start(controller) {
         let buffer = "";
+        let currentEvent = "message";
         const consume = (line: string) => {
+          if (line.startsWith("event:")) {
+            currentEvent = line.slice(6).trim();
+            return;
+          }
+          if (!line) {
+            currentEvent = "message";
+            return;
+          }
           if (!line.startsWith("data:")) return;
           const raw = line.slice(5).trim();
           if (!raw || raw === "[DONE]") return;
           try {
             const parsed = JSON.parse(raw);
+            if (currentEvent === "aveiro.usage") {
+              if (dynamicReservation) {
+                providerUsageReport = verifyProviderUsageReport(parsed, dynamicReservation.secret, {
+                  requestId,
+                  nodeId: dynamicReservation.nodeId,
+                  modelId: model.id
+                });
+              }
+              currentEvent = "message";
+              return;
+            }
             const chunk = model.providerId === "anthropic"
               ? (parsed.type === "content_block_delta" ? parsed.delta?.text || "" : "")
               : parsed.choices?.[0]?.delta?.content;
             if (typeof chunk === "string" && chunk) controller.enqueue(encoder.encode(chunk));
           } catch {
-            // Ignore SSE comments and malformed keepalives.
+            // Ignore malformed SSE data and untrusted usage extensions.
           }
         };
 
@@ -469,18 +505,19 @@ export async function POST(request: NextRequest) {
           }
           buffer += decoder.decode();
           if (buffer.trim()) consume(buffer);
+          await finalizeDispatchedUsage();
           controller.close();
         } catch {
           controller.error(new Error("La conexión con el proveedor se interrumpió."));
         } finally {
           reader.releaseLock();
-          await finalizeRequestQuota("unmetered");
+          await finalizeDispatchedUsage();
           await releaseReservation();
         }
       },
       async cancel() {
         await reader.cancel().catch(() => {});
-        await finalizeRequestQuota("unmetered");
+        await finalizeDispatchedUsage();
         await releaseReservation();
       }
     });

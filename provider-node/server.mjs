@@ -1,7 +1,7 @@
 import { createServer } from "node:http";
 import { isIP } from "node:net";
 import { pathToFileURL } from "node:url";
-import { verifyRequestSignature } from "./signing.mjs";
+import { verifyRequestSignature, createProviderUsageSignature } from "./signing.mjs";
 import { startControlPlaneHeartbeat } from "./control-plane-heartbeat.mjs";
 
 const MAX_MESSAGES = 40;
@@ -377,7 +377,8 @@ export function createProviderNodeServer(inputConfig) {
         body: JSON.stringify({
           model: job.modelId,
           messages: job.messages,
-          stream: true
+          stream: true,
+          stream_options: { include_usage: true }
         })
       });
 
@@ -395,14 +396,64 @@ export function createProviderNodeServer(inputConfig) {
         "X-Aveiro-Request-Id": job.requestId
       });
 
+      // Observe only the standard OpenAI-compatible final usage object while
+      // forwarding every original upstream byte unchanged.
+      let sseBuffer = "";
+      let runtimeUsage = null;
+      const usageDecoder = new TextDecoder();
+
+      const inspectRuntimeUsageLine = (line) => {
+        if (!line.startsWith("data:")) return;
+        const raw = line.slice(5).trim();
+        if (!raw || raw === "[DONE]") return;
+        try {
+          const parsed = JSON.parse(raw);
+          const usage = parsed && typeof parsed === "object" ? parsed.usage : null;
+          const inputTokens = usage?.prompt_tokens;
+          const outputTokens = usage?.completion_tokens;
+          if (
+            Number.isSafeInteger(inputTokens) && inputTokens >= 0 && inputTokens <= 1_000_000_000 &&
+            Number.isSafeInteger(outputTokens) && outputTokens >= 0 && outputTokens <= 1_000_000_000
+          ) {
+            runtimeUsage = { inputTokens, outputTokens };
+          }
+        } catch {
+          // Ignore comments, non-JSON SSE events and malformed keepalives.
+        }
+      };
+
       for await (const chunk of upstream.body) {
         if (res.destroyed) break;
+        sseBuffer += usageDecoder.decode(chunk, { stream: true });
+        const lines = sseBuffer.split(/\r?\n/);
+        sseBuffer = lines.pop() || "";
+        for (const line of lines) inspectRuntimeUsageLine(line);
         if (!res.write(chunk)) {
           await new Promise((resolve) => {
             res.once("drain", resolve);
             res.once("close", resolve);
           });
         }
+      }
+
+      sseBuffer += usageDecoder.decode();
+      if (sseBuffer.trim()) inspectRuntimeUsageLine(sseBuffer);
+
+      if (!res.destroyed && !res.writableEnded && runtimeUsage) {
+        const report = {
+          protocolVersion: 1,
+          type: "aveiro_usage_report",
+          requestId: job.requestId,
+          nodeId: config.nodeId,
+          modelId: job.modelId,
+          inputTokens: runtimeUsage.inputTokens,
+          outputTokens: runtimeUsage.outputTokens,
+          source: "openai_compatible_runtime",
+          reportedAtMs: Date.now()
+        };
+        const signature = createProviderUsageSignature(report, config.secret);
+        res.write("event: aveiro.usage\n");
+        res.write("data: " + JSON.stringify({ ...report, signature }) + "\n\n");
       }
       if (!res.destroyed && !res.writableEnded) res.end();
     } catch {

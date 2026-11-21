@@ -58,3 +58,26 @@ export function verifyRequestSignature({
     Buffer.from(signature, "hex")
   );
 }
+
+
+function providerUsagePayload(report) {
+  return [
+    String(report.protocolVersion),
+    report.requestId,
+    report.nodeId,
+    report.modelId,
+    String(report.inputTokens),
+    String(report.outputTokens),
+    report.source,
+    String(report.reportedAtMs)
+  ].join("\n");
+}
+
+export function createProviderUsageSignature(report, secret) {
+  if (typeof secret !== "string" || secret.length < 32) {
+    throw new Error("AVEIRO_NODE_SECRET must contain at least 32 characters.");
+  }
+  return createHmac("sha256", secret)
+    .update(providerUsagePayload(report), "utf8")
+    .digest("hex");
+}

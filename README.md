@@ -141,6 +141,7 @@ Si el modelo elegido no está disponible, Aveiro debe informar la indisponibilid
 - `lib/postgres.ts` y `lib/identity-store.ts`: conexión PostgreSQL perezosa y primitivas transaccionales de enlaces mágicos.
 - `lib/session-store.ts`: sesiones Redis opacas, CSRF ligado a sesión, revocación y expiraciones.
 - `lib/quota-store.ts`: admisión transaccional de solicitudes por cuenta y periodo UTC mensual; registra uso no medido sin estimar tokens.
+- `lib/provider-usage.ts` y `lib/provider-usage-store.ts`: verifican y almacenan reportes de uso firmados como telemetría `provider_self_reported`; no habilitan facturación.
 - `lib/mail.ts`: adaptador SMTP genérico para enlaces de un solo uso.
 - `lib/auth-security.ts`: origen canónico, cookies host-only y validación CSRF.
 - `app/auth/page.tsx`: interfaz browser-only de solicitud y confirmación de acceso.
