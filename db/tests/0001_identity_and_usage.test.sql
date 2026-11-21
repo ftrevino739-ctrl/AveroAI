@@ -53,7 +53,7 @@ SET status = 'settled',
     updated_at = now()
 WHERE request_id = '00000000-0000-4000-8000-000000000004';
 
-DO $
+DO $$
 BEGIN
   BEGIN
     UPDATE usage_reservations
@@ -66,9 +66,9 @@ BEGIN
     END IF;
   END;
 END;
-$;
+$$;
 
-DO $
+DO $$
 BEGIN
   BEGIN
     UPDATE usage_ledger
