@@ -19,12 +19,10 @@ test("persists signed provider-self-reported usage once without creating credits
   const email = "usage-report-" + randomUUID() + "@example.invalid";
 
   await pool.query("INSERT INTO app_users (id, email, status) VALUES ($1, $2, 'active')", [userId, email]);
+  // This integration test intentionally writes to the append-only telemetry
+  // table. CI uses a disposable PostgreSQL service, so leave the audit rows
+  // intact and close the pool rather than attempting a forbidden DELETE.
   t.after(async () => {
-    await pool.query("DELETE FROM provider_usage_reports WHERE request_id = $1", [requestId]);
-    await pool.query("DELETE FROM usage_reservations WHERE request_id = $1", [requestId]);
-    await pool.query("DELETE FROM account_limits WHERE user_id = $1", [userId]);
-    await pool.query("DELETE FROM email_verification_tokens WHERE user_id = $1", [userId]);
-    await pool.query("DELETE FROM app_users WHERE id = $1", [userId]);
     await pool.end();
   });
 
