@@ -1,6 +1,6 @@
 # User identity, quotas and credits — architecture decision
 
-**Status:** design approved for implementation planning; no account system is active.
+**Status:** database and magic-link token primitives implemented; no account HTTP flow is active.
 **Scope:** browser-only end-user accounts, abuse controls, durable usage accounting and future credits.
 **Depends on:** the existing Redis-backed control plane and the community inference gateway.
 
@@ -87,18 +87,18 @@ The gateway resolves the authenticated account and enforces limits before schedu
 - GET /api/account/usage — returns current limits and ledger-derived usage summary.
 - POST /api/chat — requires active session and a committed usage reservation before dispatch; remains exact-model only.
 
-These endpoints must not be stubbed with fake success responses. Until the required infrastructure exists, the current pre-account staging behavior remains explicitly non-production and must not be presented as a public account system.
+These endpoints must not be stubbed with fake success responses. The PostgreSQL connection and transactional magic-link token store now exist as internal server modules, but there is still no email delivery, HTTP authentication route, browser session or account-protected chat. Until those pieces and the required infrastructure exist, the current pre-account staging behavior remains explicitly non-production and must not be presented as a public account system.
 
 ## 8. Delivery gates
 
 1. Choose and provision organization-controlled PostgreSQL and transactional email services; set canonical production origin.
-2. Add schema migrations, unique constraints, foreign keys, indexes and transactional integration tests.
+2. Add schema migrations, unique constraints, foreign keys, indexes and transactional integration tests. The first migration and the initial token-store integration tests are now in CI; quota transactions remain pending.
 3. Implement and test magic-link issuance/consumption, generic responses, origin/CSRF checks, session rotation, expiry, revocation and logout.
 4. Require an active account in the chat gateway and atomically reserve per-account quotas before node dispatch.
 5. Extend the Provider Node protocol to return trustworthy usage metadata; test success, partial usage, cancellation, timeout, duplicate settlement and provider disconnect.
 6. Add append-only ledger settlement and a user-visible usage page.
 7. Complete privacy/retention disclosures, abuse operations, security review and production deployment review before public launch.
 
-**Schema milestone:** the first PostgreSQL migration is available at `db/migrations/0001_identity_and_usage.sql`. It creates the account, one-time email token, limits, reservation and append-only ledger tables with constraints and indexes. GitHub Actions now starts PostgreSQL 16 and applies the migration as a CI gate. This validates the DDL in CI; it does not provision a managed database or connect the application to one.
+**Persistence milestone:** `lib/postgres.ts` provides a lazy PostgreSQL pool with production TLS enforcement, and `lib/identity-store.ts` implements transactional magic-link creation, hash-only persistence, replacement of older links, one-time concurrent-safe consumption, expiry enforcement and account activation. `lib/identity-store.test.ts` exercises these operations against PostgreSQL 16 in CI. The adapter does not send email, issue sessions or expose HTTP routes; this does not provision a managed database or connect the production application.
 
-**Current gate:** no PostgreSQL database, email provider, sender domain or production deployment has been provisioned. Therefore this document is an implementation contract, not a claim that accounts, email login, quotas or credits already work.
+**Current gate:** no managed PostgreSQL database, email provider, sender domain or production deployment has been provisioned. No login endpoint is exposed and chat is not account-protected. This is an internal persistence milestone, not a claim that accounts, email login, quotas or credits already work.
