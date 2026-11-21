@@ -40,15 +40,6 @@ La interfaz puede revisarse sin una GPU, pero la inferencia real no estará disp
 
 | Variable | Proveedor / uso |
 | --- | --- |
-| `OPENAI_API_KEY` | Integración oficial de OpenAI, privada del servidor |
-| `ANTHROPIC_API_KEY` | Integración oficial de Anthropic, privada del servidor |
-| `GOOGLE_API_KEY` | Integración oficial de Gemini, privada del servidor |
-| `OPENROUTER_API_KEY` | Integración autorizada de OpenRouter |
-| `CUSTOM_BASE_URL` | URL base del endpoint compatible personalizado |
-| `CUSTOM_API_KEY` | Clave del endpoint personalizado |
-| `CUSTOM_MODEL_ID` | Identificador de modelo del endpoint personalizado |
-| `CUSTOM_MODEL_NAME` | Nombre visible del modelo personalizado |
-| `APP_URL` | URL pública de Aveiro; se envía como metadato a OpenRouter |
 | `AVEIRO_DATABASE_URL` | PostgreSQL durable para cuentas; solo servidor y TLS obligatorio en producción |
 | `AVEIRO_DATABASE_SSL` | Configura `require` para exigir TLS en el cliente PostgreSQL |
 | `AVEIRO_DEFAULT_REQUESTS_PER_MONTH` | Límite mensual finito de solicitudes para cuentas sin un plan explícito; no habilita facturación por tokens |
@@ -71,7 +62,7 @@ La interfaz puede revisarse sin una GPU, pero la inferencia real no estará disp
 Todos los valores del proceso Provider Node se configuran por separado en `provider-node/.env.example` (plantilla); nunca los necesita un usuario final ni deben copiarse al proyecto web. `AVEIRO_NODE_ID` y `AVEIRO_NODE_SECRET` aparecen arriba solo para compatibilidad con el adaptador estático antiguo.
 
 
-No guardes claves reales en Git ni en variables del cliente como `NEXT_PUBLIC_*`. En producción, usa el panel privado de variables de entorno del hosting. El secreto HMAC debe ser único por nodo y nunca debe llegar al navegador.
+No guardes secretos en Git ni en variables del cliente como `NEXT_PUBLIC_*`. Los usuarios finales nunca configuran claves de proveedores de IA: la inferencia pública depende exclusivamente de los nodos GPU remotos aprobados de Aveiro. Los secretos de infraestructura y de nodos se configuran únicamente en los paneles privados del servidor y nunca llegan al navegador.
 
 ## Registro y disponibilidad de nodos comunitarios
 
